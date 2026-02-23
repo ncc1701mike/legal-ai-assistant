@@ -1,0 +1,6 @@
+Bates_Start,Bates_End,Date,Custodian,Document_Type,Description,Privilege_Claim,Basis
+ABC-001,ABC-001,2023-10-12,"Doe, Jane",Email,"Discussion regarding draft complaint; contains legal advice.","Yes","Attorney-Client Privilege"
+ABC-002,ABC-005,2023-10-15,"Smith, Robert",Memo,"Internal strategy memo regarding deposition prep.","Yes","Work Product Doctrine"
+ABC-006,ABC-006,2023-11-01,"Doe, Jane",Letter,"Correspondence with outside counsel re: settlement.","Yes","Attorney-Client Privilege"
+ABC-007,ABC-010,2023-11-05,"Systems, Tech",Log,"Server maintenance logs for relevant period.","No","N/A"
+ABC-011,ABC-011,2023-11-12,"Doe, Jane",Email,"Request for legal review of 'Product Alpha' specs.","Yes","Attorney-Client Privilege"

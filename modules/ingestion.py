@@ -1,5 +1,9 @@
 # modules/ingestion.py
 # Document upload, text extraction, chunking, and ChromaDB storage pipeline
+import os
+import logging
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
 
 import os
 import hashlib

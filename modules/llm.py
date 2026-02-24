@@ -59,7 +59,8 @@ Provide a clear, structured answer with citations."""))
 
 
 # ── RAG Query Engine ──────────────────────────────────────────────────────────
-def rag_query(query: str, top_k: int = 5, model: str = PRIMARY_MODEL) -> Dict[str, Any]:
+def rag_query(question: str, top_k: int = 5, 
+              mode: str = "hybrid") -> Dict[str, Any]:
     """
     Full RAG pipeline in one call:
     1. Retrieve relevant chunks from ChromaDB
@@ -71,7 +72,7 @@ def rag_query(query: str, top_k: int = 5, model: str = PRIMARY_MODEL) -> Dict[st
     """
     from modules.retrieval import retrieve_and_format
 
-    context, chunks = retrieve_and_format(query, top_k=top_k)
+    context, chunks = retrieve_and_format(question, top_k=top_k, mode=mode)
     answer = query_llm(query, context=context, model=model)
 
     # Build clean citations list

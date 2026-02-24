@@ -170,12 +170,12 @@ def embed_and_store(chunks: List[Dict], doc_id: str) -> int:
     return len(chunks)
 
 
-def ingest_document(file_path: str) -> Dict[str, Any]:
+def ingest_document(file_path: str, original_name: str = None) -> Dict[str, Any]:
     """
     Full ingestion pipeline: extract → chunk → embed → store.
     Returns a summary dict with ingestion results.
     """
-    file_name = Path(file_path).name
+    file_name = original_name if original_name else Path(file_path).name
     doc_id = hashlib.md5(file_name.encode()).hexdigest()[:12]
 
     print(f"  Extracting text from {file_name}...")
@@ -209,6 +209,15 @@ def get_ingested_documents() -> List[str]:
     sources = set(m["source"] for m in results["metadatas"] if m)
     return sorted(list(sources))
 
+
+def clear_all_documents() -> None:
+    """Wipe the entire ChromaDB collection — removes all ingested documents."""
+    global collection
+    chroma_client.delete_collection(COLLECTION_NAME)
+    collection = chroma_client.get_or_create_collection(
+        name=COLLECTION_NAME,
+        metadata={"hnsw:space": "cosine"}
+    )
 
 if __name__ == "__main__":
     import sys

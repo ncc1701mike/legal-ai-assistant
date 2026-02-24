@@ -1,6 +1,11 @@
 # modules/retrieval.py
 # Semantic search and retrieval from ChromaDB vector store
 
+import os
+import logging
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+
 from typing import List, Dict, Any
 from sentence_transformers import SentenceTransformer
 import chromadb

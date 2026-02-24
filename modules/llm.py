@@ -101,10 +101,9 @@ def summarize_documents(document_names: List[str] = None) -> str:
     """
     from modules.retrieval import retrieve_and_format
 
-    summary_query = "Provide a comprehensive summary of all key facts, \
-parties, claims, dates, and legal issues present in these documents."
+    summary_query = "parties names dates evidence testimony exhibits claims jurisdiction"
 
-    context, chunks = retrieve_and_format(summary_query, top_k=10)
+    context, chunks = retrieve_and_format(summary_query, top_k=15)
 
     if document_names:
         filtered = [c for c in chunks if c["source"] in document_names]

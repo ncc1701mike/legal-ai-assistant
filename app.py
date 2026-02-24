@@ -14,7 +14,8 @@ logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
 import streamlit as st
 from dotenv import load_dotenv
 
-from modules.ingestion import ingest_document, get_ingested_documents
+from modules.ingestion import ingest_document, get_ingested_documents, clear_all_documents
+from modules.redaction import redact_document
 from modules.llm import rag_query, summarize_documents, test_connection
 
 load_dotenv()
@@ -249,6 +250,25 @@ st.markdown("""
         color: #1A1A1A !important;
         border: 1.5px solid #1A1A1A !important;
     }
+    /* Redaction tab checkbox labels */
+    [data-testid="stCheckbox"] label,
+    [data-testid="stCheckbox"] p {
+        color: #D0E8FF !important;
+        font-size: 18px !important;
+    }
+    /* Export buttons — bright border and text */
+    [data-testid="stDownloadButton"] button {
+        background-color: transparent !important;
+        color: #D0E8FF !important;
+        border: 1.5px solid #D0E8FF !important;
+        font-size: 18px !important;
+        border-radius: 6px !important;
+    }
+    [data-testid="stDownloadButton"] button:hover {
+        background-color: rgba(208,232,255,0.1) !important;
+        color: #FFFFFF !important;
+        border: 1.5px solid #FFFFFF !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -362,7 +382,7 @@ st.markdown("# ⚖️ Document Analysis")
 st.markdown("*Fully local · Air-gapped · Attorney-client privilege protected*")
 st.markdown("---")
 
-tab1, tab2 = st.tabs(["💬 Query Documents", "📋 Summarize"])
+tab1, tab2, tab3 = st.tabs(["💬 Query Documents", "📋 Summarize", "🛡️ Redact"])
 
 # ── TAB 1: Query ──────────────────────────────────────────────────────────────
 with tab1:
@@ -421,6 +441,7 @@ with tab1:
             })
 
 # ── TAB 2: Summarize ──────────────────────────────────────────────────────────
+# ── TAB 2: Summarize ──────────────────────────────────────────────────────────
 with tab2:
     st.markdown("### Generate Document Summary")
     st.markdown("Produces a structured executive summary of all uploaded documents.")
@@ -443,10 +464,187 @@ with tab2:
                 unsafe_allow_html=True
             )
 
-            # Download button
+            # Download summary as TXT
             st.download_button(
                 label="Download Summary as TXT",
                 data=summary,
                 file_name="case_summary.txt",
                 mime="text/plain"
             )
+# ── TAB 3: Redact ─────────────────────────────────────────────────────────────
+with tab3:
+    st.markdown("### 🛡️ Document Redaction & Template Generator")
+    st.markdown("Upload a document to automatically detect and replace PII with placeholders.")
+
+    all_categories = {
+        "[PARTY_NAME]":       "Person names",
+        "[ORGANIZATION]":     "Companies & courts",
+        "[LOCATION]":         "Cities & states",
+        "[DATE]":             "All dates",
+        "[CASE_NO]":          "Case numbers",
+        "[SSN]":              "Social security numbers",
+        "[PHONE]":            "Phone numbers",
+        "[EMAIL]":            "Email addresses",
+        "[FINANCIAL_AMOUNT]": "Dollar amounts",
+        "[BAR_NO]":           "Attorney bar numbers",
+        "[ZIP_CODE]":         "ZIP codes",
+        "[DOCKET_NO]":        "Docket numbers",
+    }
+
+    col1, col2 = st.columns([2, 1])
+    
+    with col2:
+        st.markdown("**Select Categories to Redact**")
+        st.caption("Nothing is redacted unless explicitly selected.")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            if st.button("☑️ Select All", key="select_all",
+                        use_container_width=True):
+                for placeholder in all_categories:
+                    st.session_state[f"redact_{placeholder}"] = True
+                st.rerun()
+        with col_b:
+            if st.button("☐ Clear All", key="clear_all_redact",
+                        use_container_width=True):
+                for placeholder in all_categories:
+                    st.session_state[f"redact_{placeholder}"] = False
+                st.rerun()
+
+        selected_categories = []
+        for placeholder, description in all_categories.items():
+            if st.checkbox(
+                f"{placeholder} — {description}",
+                value=False,
+                key=f"redact_{placeholder}"
+            ):
+                selected_categories.append(placeholder)
+
+        st.markdown("---")
+        aggressive = st.toggle("Aggressive Mode", value=False)
+        st.caption("Also redacts legal references and cardinal numbers.")
+    
+    with col1:
+        redact_file = st.file_uploader(
+            "Upload document to redact",
+            type=["pdf", "docx", "xlsx", "txt", "csv"],
+            key="redact_uploader",
+            help="Document will be processed locally — no data leaves this machine"
+        )
+
+        if redact_file:
+            if not selected_categories:
+                st.info("☝️ Select at least one category above to enable redaction.")
+
+            if st.button("🛡️ Redact Document", type="primary",
+                        disabled=len(selected_categories) == 0):
+                with st.spinner(f"Redacting {redact_file.name}..."):
+                    # Save to temp file
+                    with tempfile.NamedTemporaryFile(
+                        delete=False,
+                        suffix=Path(redact_file.name).suffix
+                    ) as tmp:
+                        tmp.write(redact_file.getbuffer())
+                        tmp_path = tmp.name
+
+                    # Redact
+                    output_path = tmp_path + "_REDACTED.txt"
+                    report = redact_document(
+                        tmp_path,
+                        output_path=output_path,
+                        aggressive=aggressive,
+                        categories=selected_categories if selected_categories else None
+                    )
+                    os.unlink(tmp_path)
+
+                if report["status"] == "success":
+                    st.success(f"✅ Redaction complete — {report['total_redactions']} items redacted")
+
+                    # Show placeholder counts
+                    st.markdown("**Redaction Summary:**")
+                    cols = st.columns(3)
+                    for i, (placeholder, count) in enumerate(report['placeholder_counts'].items()):
+                        with cols[i % 3]:
+                            st.metric(placeholder, count)
+
+                    # Read and show preview
+                    with open(output_path, "r", encoding="utf-8") as f:
+                        redacted_content = f.read()
+
+                    st.markdown("**Preview (first 1000 characters):**")
+                    st.markdown(
+                        f'<div class="answer-box" style="font-size:16px !important;">'
+                        f'{redacted_content[:1000]}...'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+
+                    # Export options
+                    st.markdown("**Export Redacted Document As:**")
+                    export_col1, export_col2, export_col3 = st.columns(3)
+
+                    with export_col1:
+                        st.download_button(
+                            label="📄 Export as TXT",
+                            data=redacted_content,
+                            file_name=f"{Path(redact_file.name).stem}_REDACTED.txt",
+                            mime="text/plain",
+                            use_container_width=True
+                        )
+
+                    with export_col2:
+                        # Generate DOCX in memory
+                        from docx import Document as DocxDocument
+                        from io import BytesIO
+                        doc = DocxDocument()
+                        doc.add_heading("REDACTED DOCUMENT", level=1)
+                        doc.add_paragraph(f"Source: {redact_file.name}")
+                        doc.add_paragraph(f"Redactions: {report['total_redactions']}")
+                        doc.add_paragraph("─" * 50)
+                        for para in redacted_content.split("\n"):
+                            if para.strip():
+                                doc.add_paragraph(para)
+                        docx_buffer = BytesIO()
+                        doc.save(docx_buffer)
+                        docx_buffer.seek(0)
+                        st.download_button(
+                            label="📝 Export as DOCX",
+                            data=docx_buffer.getvalue(),
+                            file_name=f"{Path(redact_file.name).stem}_REDACTED.docx",
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            use_container_width=True
+                        )
+
+                    with export_col3:
+                        # Generate PDF in memory
+                        from reportlab.lib.pagesizes import letter
+                        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+                        from reportlab.lib.styles import getSampleStyleSheet
+                        from io import BytesIO as BytesIO2
+                        pdf_buffer = BytesIO2()
+                        pdf_doc = SimpleDocTemplate(pdf_buffer, pagesize=letter)
+                        styles = getSampleStyleSheet()
+                        story = []
+                        story.append(Paragraph("REDACTED DOCUMENT", styles['Title']))
+                        story.append(Paragraph(f"Source: {redact_file.name}", styles['Normal']))
+                        story.append(Paragraph(f"Total redactions: {report['total_redactions']}", styles['Normal']))
+                        story.append(Spacer(1, 12))
+                        for para in redacted_content.split("\n"):
+                            if para.strip():
+                                try:
+                                    story.append(Paragraph(para, styles['Normal']))
+                                    story.append(Spacer(1, 6))
+                                except Exception:
+                                    pass
+                        pdf_doc.build(story)
+                        pdf_buffer.seek(0)
+                        st.download_button(
+                            label="📋 Export as PDF",
+                            data=pdf_buffer.getvalue(),
+                            file_name=f"{Path(redact_file.name).stem}_REDACTED.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+
+                    os.unlink(output_path)
+                else:
+                    st.error(f"Redaction failed: {report['status']}")

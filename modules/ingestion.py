@@ -152,9 +152,24 @@ def chunk_pages(pages: List[Dict], source: str) -> List[Dict[str, Any]]:
             })
     return chunks
 
-
+# ── Embed and Store Chunks ────────────────────────────────────────────────────
 def embed_and_store(chunks: List[Dict], doc_id: str) -> int:
     """Embed chunks locally and store in ChromaDB. Returns chunk count."""
+    
+    # Deduplicate chunks — prevents repeated template text from dominating
+    seen = set()
+    unique_chunks = []
+    for chunk in chunks:
+        text_key = chunk["text"].strip()[:200]
+        if text_key not in seen:
+            seen.add(text_key)
+            unique_chunks.append(chunk)
+    
+    if len(unique_chunks) < len(chunks):
+        print(f"  Deduplicated: {len(chunks)} → {len(unique_chunks)} chunks")
+    
+    chunks = unique_chunks
+    
     texts = [c["text"] for c in chunks]
     embeddings = embedding_model.encode(texts, show_progress_bar=False).tolist()
 
@@ -169,7 +184,7 @@ def embed_and_store(chunks: List[Dict], doc_id: str) -> int:
     )
     return len(chunks)
 
-
+# ── Ingest Document ───────────────────────────────────────────────────────────
 def ingest_document(file_path: str, original_name: str = None) -> Dict[str, Any]:
     """
     Full ingestion pipeline: extract → chunk → embed → store.

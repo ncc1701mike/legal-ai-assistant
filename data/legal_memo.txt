@@ -1,0 +1,105 @@
+CONFIDENTIAL ATTORNEY-CLIENT PRIVILEGED MEMORANDUM
+
+TO:     Shenelle A. Washington, Esq.
+FROM:   Associate Research Team
+DATE:   February 1, 2024
+RE:     Legal Analysis — Breach of Contract and Fraud Claims
+        Westbrook Construction LLC v. Harmon Property Group Inc.
+        Case No. 24-CV-01134, Circuit Court of Cook County, Illinois
+
+I. EXECUTIVE SUMMARY
+
+This memorandum analyzes the breach of contract and fraudulent misrepresentation 
+claims arising from a construction contract dispute between Westbrook Construction 
+LLC ("Westbrook") and Harmon Property Group Inc. ("Harmon"). Based on our review 
+of the contract documents, correspondence, and financial records, we believe 
+Westbrook has strong claims on both theories.
+
+II. FACTUAL BACKGROUND
+
+On April 12, 2023, Westbrook and Harmon entered into a General Construction 
+Agreement ("Contract") for the renovation of a commercial property located at 
+8800 North Michigan Avenue, Chicago, Illinois 60611. The Contract price was 
+$2,400,000, with a completion deadline of October 31, 2023.
+
+Harmon paid an initial deposit of $480,000 (20% of contract price) on April 15, 
+2023. Westbrook commenced work on May 1, 2023 and substantially completed the 
+project by the October 31, 2023 deadline.
+
+Despite substantial completion, Harmon has refused to pay the outstanding balance 
+of $1,920,000, claiming construction defects that Westbrook disputes. Internal 
+Harmon emails obtained through discovery reveal that Harmon's CEO, Brandon T. 
+Harmon III, directed staff to manufacture defect claims to avoid payment, stating 
+in an email dated November 3, 2023: "Find me something wrong with this building 
+or find another job."
+
+III. BREACH OF CONTRACT ANALYSIS
+
+Under Illinois law, a breach of contract claim requires: (1) the existence of a 
+valid and enforceable contract; (2) performance by the plaintiff; (3) breach by 
+the defendant; and (4) resulting damages. Gonzalez v. American Express Co., 
+2019 IL App (1st) 180552.
+
+A. Contract Validity
+The April 12, 2023 General Construction Agreement is a valid written contract, 
+signed by authorized representatives of both parties, supported by adequate 
+consideration, and containing all material terms.
+
+B. Westbrook's Performance
+Project completion documentation, third-party inspection reports dated October 28, 
+2023 and November 2, 2023, and Harmon's own internal communications confirm 
+substantial completion by the contractual deadline.
+
+C. Harmon's Breach
+Harmon's refusal to tender the outstanding balance of $1,920,000 constitutes a 
+clear breach of the payment obligations under Section 4.2 of the Contract.
+
+D. Damages
+Westbrook's damages include:
+   - Outstanding contract balance:        $1,920,000
+   - Interest at 5% per annum from 
+     November 1, 2023:                       $16,000 (to date)
+   - Attorney's fees (if fees clause 
+     applies under Section 12.1):          $185,000 (estimated)
+   TOTAL ESTIMATED DAMAGES:              $2,121,000
+
+IV. FRAUDULENT MISREPRESENTATION ANALYSIS
+
+To establish fraudulent misrepresentation under Illinois law, Westbrook must prove: 
+(1) a false statement of material fact; (2) known to be false by the party making 
+it; (3) made with intent to induce reliance; (4) actual reliance; and (5) resulting 
+damages. Doe v. Dilling, 228 Ill.2d 324 (2008).
+
+The November 3, 2023 email from Brandon T. Harmon III constitutes direct evidence 
+of intentional fabrication of defect claims. This email has been authenticated 
+through Harmon's IT department records and corroborated by two former Harmon 
+employees, Jennifer Reyes (SSN: 555-66-7777) and David Park, who have provided 
+sworn affidavits dated January 15, 2024.
+
+NOTE TO FILE: SSN above included in source document — flag for redaction 
+before any disclosure to opposing counsel.
+
+V. RECOMMENDED NEXT STEPS
+
+1. File motion for summary judgment on breach of contract claim by March 15, 2024
+2. Subpoena Harmon's financial records to establish ability to pay
+3. Depose Brandon T. Harmon III no later than April 1, 2024
+4. Consider filing motion for sanctions based on discovery misconduct
+5. Evaluate punitive damages claim based on fraud evidence
+
+VI. CONCLUSION
+
+The evidence strongly supports both breach of contract and fraudulent 
+misrepresentation claims. The November 3, 2023 email is particularly 
+damaging to Harmon's position and should be the centerpiece of our 
+litigation strategy.
+
+Respectfully submitted,
+
+Associate Research Team
+Washington & Associates LLC
+77 West Wacker Drive, Suite 3200
+Chicago, Illinois 60601
+Tel: 312-555-0445
+Fax: 312-555-0446
+shenelle@washingtonlaw.com

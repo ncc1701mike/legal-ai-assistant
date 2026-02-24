@@ -374,6 +374,19 @@ with st.sidebar:
     # Settings
     st.markdown("### Settings")
     top_k = st.slider("Chunks to retrieve", min_value=3, max_value=10, value=5)
+    st.markdown("**Retrieval Strategy**")
+    retrieval_mode = st.selectbox(
+        "Mode",
+        options=["hybrid", "vector", "hyde", "bm25"],
+        index=0,
+        help=(
+            "Hybrid: Best overall — combines semantic + keyword search\n"
+            "Vector: Fast semantic similarity search\n"
+            "HyDE: Best for conceptual queries — generates hypothetical answer first\n"
+            "BM25: Best for exact legal terms, statute numbers, case citations"
+        ),
+        key="retrieval_mode"
+    )
     st.caption("Higher = more context, slower response")
 
 
@@ -417,7 +430,11 @@ with tab1:
             # Get RAG response
             with st.chat_message("assistant"):
                 with st.spinner("Searching documents and generating response..."):
-                    result = rag_query(query, top_k=top_k)
+                    result = rag_query(
+                                        user_input,
+                                        top_k=st.session_state.get("top_k", 5),
+                                        mode=st.session_state.get("retrieval_mode", "hybrid")
+                                    )
 
                 st.markdown(result["answer"])
 
@@ -440,7 +457,6 @@ with tab1:
                 "sources": result["sources"]
             })
 
-# ── TAB 2: Summarize ──────────────────────────────────────────────────────────
 # ── TAB 2: Summarize ──────────────────────────────────────────────────────────
 with tab2:
     st.markdown("### Generate Document Summary")

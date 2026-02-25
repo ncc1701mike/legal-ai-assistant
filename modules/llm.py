@@ -73,7 +73,7 @@ def rag_query(question: str, top_k: int = 5,
     from modules.retrieval import retrieve_and_format
 
     context, chunks = retrieve_and_format(question, top_k=top_k, mode=mode)
-    answer = query_llm(query, context=context, model=model)
+    answer = query_llm(question, context=context)
 
     # Build clean citations list
     sources = []
@@ -84,17 +84,17 @@ def rag_query(question: str, top_k: int = 5,
             sources.append({
                 "file": chunk["source"],
                 "page": chunk["page"],
-                "score": chunk["score"]
+                "score": chunk.get("rrf_score", chunk.get("score", 0))
             })
             seen.add(key)
 
     return {
-        "query": query,
+        "question": question,
         "answer": answer,
         "sources": sources,
+        "chunks": chunks,
         "chunks_used": len(chunks)
     }
-
 
 def summarize_documents(document_names: List[str] = None) -> str:
     """

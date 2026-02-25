@@ -1,0 +1,106 @@
+{
+  "metadata": {
+    "total_questions": 15,
+    "documents": [
+      "Raw Test Data.pdf",
+      "complaint_for_a_civil_case.docx",
+      "settlement_agreement.txt",
+      "deposition_transcript.txt",
+      "legal_memo.txt"
+    ],
+    "model_used": "gpt-4o",
+    "questions_per_doc": 3
+  },
+  "questions": [
+    {
+      "question": "What was the outcome of the Motion to Suppress Evidence?",
+      "ground_truth": "The Court denied the Motion to Suppress Evidence.",
+      "question_type": "factual",
+      "source_doc": "Raw Test Data.pdf"
+    },
+    {
+      "question": "What legal argument might the defense have made to support the Motion to Suppress Evidence?",
+      "ground_truth": "The defense might have argued that the evidence was obtained unlawfully or violated the defendant's rights, as indicated by the objection to the Court's ruling.",
+      "question_type": "analytical",
+      "source_doc": "Raw Test Data.pdf"
+    },
+    {
+      "question": "What does the term 'probable cause' mean in the context of this hearing?",
+      "ground_truth": "In this context, 'probable cause' refers to the legal standard that there is a reasonable basis for believing that a crime may have been committed, which the Court found as charged.",
+      "question_type": "legal_terminology",
+      "source_doc": "Raw Test Data.pdf"
+    },
+    {
+      "question": "What is the title of the document?",
+      "ground_truth": "Complaint for a Civil Case",
+      "question_type": "factual",
+      "source_doc": "complaint_for_a_civil_case.docx"
+    },
+    {
+      "question": "What is the significance of the phrase 'Pro Se' in the context of this document?",
+      "ground_truth": "The phrase 'Pro Se' indicates that the complaint is filed by a person representing themselves in court without an attorney.",
+      "question_type": "legal_terminology",
+      "source_doc": "complaint_for_a_civil_case.docx"
+    },
+    {
+      "question": "How is the case number determined for this complaint?",
+      "ground_truth": "The case number is to be filled in by the Clerk’s Office.",
+      "question_type": "analytical",
+      "source_doc": "complaint_for_a_civil_case.docx"
+    },
+    {
+      "question": "What is the total settlement amount agreed upon in the Settlement Agreement and Release?",
+      "ground_truth": "The total settlement amount is THREE HUNDRED FIFTY THOUSAND DOLLARS ($350,000.00).",
+      "question_type": "factual",
+      "source_doc": "settlement_agreement.txt"
+    },
+    {
+      "question": "How does the Settlement Agreement address the issue of liability or wrongdoing?",
+      "ground_truth": "The Agreement states that nothing in it shall be construed as an admission of liability or wrongdoing by either party.",
+      "question_type": "analytical",
+      "source_doc": "settlement_agreement.txt"
+    },
+    {
+      "question": "What is the legal significance of the 'Release of Claims' section in this Agreement?",
+      "ground_truth": "The 'Release of Claims' section legally signifies that the Plaintiff releases and forever discharges the Defendant from any and all claims, demands, causes of action, and liabilities of any kind whatsoever, known or unknown, arising out of or related to Plaintiff's employment with Defendant.",
+      "question_type": "legal_terminology",
+      "source_doc": "settlement_agreement.txt"
+    },
+    {
+      "question": "What licenses does Robert Eugene Kessler currently hold?",
+      "ground_truth": "Robert Eugene Kessler holds a Series 7, Series 63, and Series 65 license, and he is also a Certified Financial Planner (CFP).",
+      "question_type": "factual",
+      "source_doc": "deposition_transcript.txt"
+    },
+    {
+      "question": "Did Robert Eugene Kessler alter Marcus Holloway's investment strategy after receiving the email about his retirement plans?",
+      "ground_truth": "Robert Eugene Kessler did not recall making any significant changes to Marcus Holloway's investment strategy after receiving the email about his retirement plans.",
+      "question_type": "analytical",
+      "source_doc": "deposition_transcript.txt"
+    },
+    {
+      "question": "What does the term 'moderate growth strategy' imply in the context of investment advice?",
+      "ground_truth": "In the context of investment advice, a 'moderate growth strategy' implies an investment approach that balances risk and reward, aiming for growth over time while considering the investor's moderate risk tolerance and investment horizon.",
+      "question_type": "legal_terminology",
+      "source_doc": "deposition_transcript.txt"
+    },
+    {
+      "question": "What is the total estimated damages Westbrook is claiming in the breach of contract case against Harmon?",
+      "ground_truth": "The total estimated damages Westbrook is claiming are $2,121,000, which includes the outstanding contract balance of $1,920,000, interest of $16,000, and estimated attorney's fees of $185,000.",
+      "question_type": "factual",
+      "source_doc": "legal_memo.txt"
+    },
+    {
+      "question": "How does the email from Brandon T. Harmon III impact the fraudulent misrepresentation claim?",
+      "ground_truth": "The email from Brandon T. Harmon III, dated November 3, 2023, is direct evidence of intentional fabrication of defect claims, as it shows the CEO directed staff to manufacture defect claims to avoid payment. This supports the fraudulent misrepresentation claim by demonstrating a false statement of material fact made with intent to induce reliance.",
+      "question_type": "analytical",
+      "source_doc": "legal_memo.txt"
+    },
+    {
+      "question": "What are the elements required to establish a breach of contract claim under Illinois law?",
+      "ground_truth": "Under Illinois law, a breach of contract claim requires: (1) the existence of a valid and enforceable contract; (2) performance by the plaintiff; (3) breach by the defendant; and (4) resulting damages, as cited in Gonzalez v. American Express Co., 2019 IL App (1st) 180552.",
+      "question_type": "legal_terminology",
+      "source_doc": "legal_memo.txt"
+    }
+  ]
+}

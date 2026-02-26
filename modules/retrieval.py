@@ -17,6 +17,16 @@ from modules.ingestion import CHROMA_PATH, COLLECTION_NAME, EMBEDDING_MODEL
 # ── Initialize Components ─────────────────────────────────────────────────────
 embedding_model = SentenceTransformer(EMBEDDING_MODEL, cache_folder="./db/embeddings")
 
+# At module level, after embedding_model initialization
+_cross_encoder = None
+
+def _get_cross_encoder():
+    global _cross_encoder
+    if _cross_encoder is None:
+        from sentence_transformers import CrossEncoder
+        _cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", max_length=512)
+    return _cross_encoder
+
 chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
 collection = chroma_client.get_or_create_collection(
     name=COLLECTION_NAME,
@@ -179,8 +189,7 @@ def hybrid_retrieve(query: str, top_k: int = 5,
     if use_hyde:
         try:
             semantic_chunks = hyde_retrieve(query, top_k=fetch_k)
-            print(f"DEBUG HyDE returned {len(semantic_chunks)} chunks from: "
-                f"{set(c['source'] for c in semantic_chunks)}")
+            
         except Exception as e:
             print(f"DEBUG HyDE failed: {e}, falling back to vector")
             semantic_chunks = retrieve(query, top_k=fetch_k)
@@ -232,6 +241,42 @@ def hybrid_retrieve(query: str, top_k: int = 5,
         results.append(chunk)
 
     return results
+
+
+# ── Strategy 5: Hybrid + Cross-Encoder Reranker ───────────────────────────
+def rerank_retrieve(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    """
+    Three-stage retrieval pipeline:
+    1. Hybrid RRF fetches top 20 candidates (broad recall)
+    2. Cross-encoder reranker scores all 20 against the actual query
+    3. Return top_k reranked results (precision)
+    
+    The cross-encoder reads query+chunk together using full cross-attention,
+    producing a much more accurate relevance score than cosine similarity.
+    Model: cross-encoder/ms-marco-MiniLM-L-6-v2 (runs locally, ~80MB)
+    """
+    from sentence_transformers import CrossEncoder
+
+    # Stage 1: Get broad candidate pool from hybrid
+    candidates = hybrid_retrieve(query, top_k=20, use_hyde=True)
+
+    if not candidates:
+        return retrieve(query, top_k=top_k)
+
+    # Stage 2: Rerank with cross-encoder
+    cross_encoder = _get_cross_encoder()
+
+    pairs = [(query, chunk["text"]) for chunk in candidates]
+    scores = cross_encoder.predict(pairs)
+
+    # Attach rerank scores
+    for chunk, score in zip(candidates, scores):
+        chunk["rerank_score"] = round(float(score), 6)
+        chunk["method"] = "hybrid_rerank"
+
+    # Stage 3: Sort by rerank score, return top_k
+    reranked = sorted(candidates, key=lambda x: x["rerank_score"], reverse=True)
+    return reranked[:top_k]
 
 # ── Diversify Results ───────────────────────────────────────────────────────
 def diversify_results(chunks: List[Dict[str, Any]], 
@@ -296,6 +341,9 @@ def retrieve_and_format(query: str, top_k: int = 5,
         chunks = bm25_retrieve(query, top_k=top_k * 2)
     elif mode == "hybrid":
         chunks = hybrid_retrieve(query, top_k=top_k * 2, use_hyde=True)
+    elif mode == "rerank":
+        chunks = rerank_retrieve(query, top_k=top_k)
+        return format_context(chunks), chunks  # skip diversify — reranker handles it
     else:
         chunks = retrieve(query, top_k=top_k * 2)
 

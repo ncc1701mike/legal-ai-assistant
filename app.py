@@ -377,10 +377,11 @@ with st.sidebar:
     st.markdown("**Retrieval Strategy**")
     retrieval_mode = st.selectbox(
         "Mode",
-        options=["hybrid", "vector", "hyde", "bm25"],
+        options=["rerank", "hybrid", "vector", "hyde", "bm25"],
         index=0,
         help=(
-            "Hybrid: Best overall — combines semantic + keyword search\n"
+            "Rerank: Best overall strategy for complex questions — reranks chunks using cross-encoder\n"
+            "Hybrid: Best for general questions — combines semantic + keyword search\n"
             "Vector: Fast semantic similarity search\n"
             "HyDE: Best for conceptual queries — generates hypothetical answer first\n"
             "BM25: Best for exact legal terms, statute numbers, case citations"
@@ -433,7 +434,7 @@ with tab1:
                     result = rag_query(
                                         user_input,
                                         top_k=st.session_state.get("top_k", 5),
-                                        mode=st.session_state.get("retrieval_mode", "hybrid")
+                                        mode=st.session_state.get("retrieval_mode", "rerank")
                                     )
 
                 st.markdown(result["answer"])

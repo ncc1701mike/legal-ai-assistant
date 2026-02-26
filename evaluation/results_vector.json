@@ -1,10 +1,10 @@
 {
   "mode": "vector",
   "scores": {
-    "faithfulness": 0.7335,
-    "answer_relevancy": 0.6719,
-    "context_precision": 0.75,
-    "context_recall": 0.8
+    "faithfulness": 0.6658,
+    "answer_relevancy": 0.6788,
+    "context_precision": 0.7833,
+    "context_recall": 0.8667
   },
   "per_question": [
     {

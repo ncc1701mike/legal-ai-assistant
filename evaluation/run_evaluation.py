@@ -24,7 +24,7 @@ from modules.llm import rag_query
 # ── Configuration ─────────────────────────────────────────────────────────────
 TESTSET_PATH = Path(__file__).parent / "testset.json"
 RESULTS_DIR = Path(__file__).parent
-MODES = ["vector", "hybrid"]
+MODES = ["vector", "hybrid", "rerank"]
 
 # ── Load Testset ──────────────────────────────────────────────────────────────
 def load_testset() -> list[dict]:

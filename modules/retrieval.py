@@ -258,7 +258,7 @@ def rerank_retrieve(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
     from sentence_transformers import CrossEncoder
 
     # Stage 1: Get broad candidate pool from hybrid
-    candidates = hybrid_retrieve(query, top_k=20, use_hyde=True)
+    candidates = hybrid_retrieve(query, top_k=30, use_hyde=True)
 
     if not candidates:
         return retrieve(query, top_k=top_k)

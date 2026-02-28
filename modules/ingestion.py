@@ -21,7 +21,7 @@ from sentence_transformers import SentenceTransformer
 CHROMA_PATH = "./db/chroma"
 COLLECTION_NAME = "legal_docs"
 CHUNK_SIZE = 800
-CHUNK_OVERLAP = 150
+CHUNK_OVERLAP = 300
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"  # fast, local, no external calls
 
 # ── Initialize Components ─────────────────────────────────────────────────────

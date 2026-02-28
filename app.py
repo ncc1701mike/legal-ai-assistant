@@ -6,7 +6,6 @@ import os
 import logging
 import tempfile
 from pathlib import Path
-from modules.ingestion import ingest_document, get_ingested_documents, clear_all_documents
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
@@ -346,7 +345,7 @@ with st.sidebar:
 
     # Settings
     st.markdown("### Settings")
-    top_k = st.slider("Chunks to retrieve", min_value=3, max_value=10, value=5)
+    top_k = st.slider("Chunks to retrieve", min_value=3, max_value=10, value=7)
     st.caption("Higher = more context, slower response")
     st.markdown("**Retrieval Strategy**")
     retrieval_mode = st.selectbox(
@@ -383,7 +382,7 @@ with tab1:
                     st.markdown(
                         f'<div class="citation-box">'
                         f'📄 {source["file"]} — Page {source["page"]} '
-                        f'(relevance: {source["score"]})'
+                        f'(relevance: {source.get("rerank_score") or source.get("score") or 0:.3f})'
                         f'</div>',
                         unsafe_allow_html=True
                     )
@@ -403,7 +402,7 @@ with tab1:
             with st.chat_message("assistant"):
                 with st.spinner("Searching documents and generating response..."):
                     result = rag_query(
-                                        user_input,
+                                        query,
                                         top_k=st.session_state.get("top_k", 5),
                                         mode=st.session_state.get("retrieval_mode", "rerank")
                                     )
@@ -417,7 +416,7 @@ with tab1:
                         st.markdown(
                             f'<div class="citation-box">'
                             f'📄 {source["file"]} — Page {source["page"]} '
-                            f'(relevance: {source["score"]})'
+                            f'(relevance: {source.get("rerank_score") or source.get("score") or 0:.3f})'
                             f'</div>',
                             unsafe_allow_html=True
                         )

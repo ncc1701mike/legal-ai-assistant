@@ -33,53 +33,146 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    /* Base font size ~15% larger */
-    html, body, [class*="css"] {
-        font-size: 18px !important;
+    /* ── Base ──────────────────────────────────────────────── */
+    html, body, [class*="css"] { font-size: 18px !important; }
+    .main, .stApp { background-color: #0D1117; color: #E6EDF3; }
+
+    /* ── Header strip — deep teal ──────────────────────────── */
+    header[data-testid="stHeader"] {
+        background-color: #0A3D3D !important;
+        border-bottom: 1px solid #1F5F5F !important;
     }
 
-    .main { background-color: #0D1117; }
-    .stApp { background-color: #0D1117; color: #E6EDF3; }
-
-    /* Sidebar dusty blue background */
-    [data-testid="stSidebar"] {
-        background-color: #5A86AD !important;
-    }
-
-    /* Sidebar font — medium charcoal grey, no white bubbles */
-    [data-testid="stSidebar"] * {
-        color: #2C2C2C !important;
-        background-color: transparent !important;
-    }
-    [data-testid="stSidebar"] .stMarkdown p {
-        color: #2C2C2C !important;
-        font-size: 18px !important;
-        background-color: transparent !important;
-    }
+    /* ── Sidebar ────────────────────────────────────────────── */
+    [data-testid="stSidebar"] { background-color: #5A86AD !important; }
+    [data-testid="stSidebar"] * { color: #2C2C2C !important; background-color: transparent !important; }
+    [data-testid="stSidebar"] .stMarkdown p { color: #2C2C2C !important; font-size: 18px !important; }
     [data-testid="stSidebar"] code {
         color: #1A1A1A !important;
         background-color: rgba(0,0,0,0.15) !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-width: 200px !important;
+        display: inline-block !important;
     }
+    [data-testid="stSidebar"] h2 { font-size: 26px !important; color: #1A1A1A !important; }
+    [data-testid="stSidebar"] h2:first-of-type { font-size: 32px !important; }
+    [data-testid="stSidebar"] h3 { font-size: 20px !important; color: #1A1A1A !important; }
 
-    /* Sidebar title ~10% larger */
-    [data-testid="stSidebar"] h2 {
-        font-size: 26px !important;
+    /* ── Sidebar buttons — transparent, charcoal border ────── */
+    [data-testid="stSidebar"] .stButton > button {
+        background-color: transparent !important;
+        color: #2C2C2C !important;
+        border: 1.5px solid #2C2C2C !important;
+        border-radius: 6px !important;
+        font-size: 17px !important;
+    }
+    [data-testid="stSidebar"] .stButton > button:hover {
+        background-color: rgba(0,0,0,0.1) !important;
         color: #1A1A1A !important;
+        border-color: #1A1A1A !important;
+    }
+    
+    /* ── Sidebar selectbox ──────────────────────────────────── */
+    [data-testid="stSidebar"] [data-baseweb="select"] > div {
+        background-color: transparent !important;
+        border: 1.5px solid #2C2C2C !important;
+        border-radius: 6px !important;
+    }
+    
+    [data-testid="stSidebar"] [data-baseweb="select"] * {
+        color: #2C2C2C !important;
+        background-color: transparent !important;
     }
 
-    /* Sidebar Amicus AI title ~25% larger */
-    [data-testid="stSidebar"] h2:first-of-type {
-        font-size: 32px !important;
+    /* ── Sidebar slider ─────────────────────────────────────── */
+    [data-testid="stSidebar"] [data-testid="stSlider"] > div,
+    [data-testid="stSidebar"] [data-testid="stSlider"] > div > div,
+    [data-testid="stSidebar"] [data-testid="stSlider"] > div > div > div {
+        background-color: transparent !important;
+    }
+    [data-testid="stSidebar"] [data-baseweb="slider"] > div {
+        background-color: #3D6B8A !important;
+        height: 4px !important;
+    }
+    [data-testid="stSidebar"] [data-baseweb="slider"] > div > div {
+        background-color: #2EA043 !important;
+    }
+    [data-testid="stSidebar"] [role="slider"] {
+        background-color: #2EA043 !important;
+        border: 3px solid #2EA043 !important;
+        box-shadow: none !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stSlider"] span { color: #2C2C2C !important; }
+
+    [data-testid="stSidebar"] [role="slider"] {
+        background-color: #2EA043 !important;
+        border-color: #2EA043 !important;
+        box-shadow: none !important;
+    }
+
+    /* ── Main title ─────────────────────────────────────────── */
+    .stApp h1 { font-size: 42px !important; color: #E6EDF3 !important; }
+
+    /* ── Main area buttons — green ──────────────────────────── */
+    section[data-testid="stMain"] .stButton > button {
+        background-color: #238636 !important;
+        color: #FFFFFF !important;
+        border: 2px solid #2EA043 !important;
+        font-size: 18px !important;
+        border-radius: 6px !important;
+        transition: all 0.2s ease !important;
+    }
+    section[data-testid="stMain"] .stButton > button:hover {
+        background-color: #FFFFFF !important;
+        color: #238636 !important;
+        border-color: #238636 !important;
+    }
+
+    /* ── Browse Files button ────────────────────────────────── */
+    [data-testid="stFileUploadDropzone"] button,
+    [data-testid="stBaseButton-secondary"] {
+        background-color: transparent !important;
+        color: #2C2C2C !important;
+        border: 1.5px solid #2C2C2C !important;
+        border-radius: 6px !important;
+        font-size: 18px !important;
+    }
+    [data-testid="stFileUploadDropzone"] button:hover,
+    [data-testid="stBaseButton-secondary"]:hover {
+        background-color: rgba(0,0,0,0.1) !important;
         color: #1A1A1A !important;
+        border-color: #1A1A1A !important;
     }
 
-    /* Main title ~10% larger */
-    .stApp h1 {
-        font-size: 42px !important;
+    /* ── Tabs ───────────────────────────────────────────────── */
+    .stTabs [data-baseweb="tab"] {
+        font-size: 18px !important;
+        color: #E6EDF3 !important;
+        background-color: transparent !important;
+        border: none !important;
+    }
+    .stTabs [data-baseweb="tab"]:hover { color: #58A6FF !important; }
+    .stTabs [aria-selected="true"] {
+        color: #2EA043 !important;
+        border-bottom: 3px solid #2EA043 !important;
+        background-color: transparent !important;
+    }
+    .stTabs [data-baseweb="tab-highlight"] { background-color: #2EA043 !important; }
+    .stTabs [data-baseweb="tab-border"] { background-color: #2EA043 !important; }
+
+    .stTabs [data-baseweb="tab"] span {
         color: #E6EDF3 !important;
     }
+    .stTabs [aria-selected="true"] span {
+        color: #2EA043 !important;
+    }
+    .stTabs [data-baseweb="tab"]:hover span {
+        color: #58A6FF !important;
+    }
 
-    /* Response text — 30% larger, light blue, ALL elements */
+    /* ── Chat messages ──────────────────────────────────────── */
     [data-testid="stChatMessage"] .stMarkdown p,
     [data-testid="stChatMessage"] .stMarkdown li,
     [data-testid="stChatMessage"] .stMarkdown ol li,
@@ -94,18 +187,10 @@ st.markdown("""
         color: #D0E8FF !important;
         line-height: 1.7 !important;
     }
-
-    /* Numbered and indented lists */
-    [data-testid="stChatMessage"] ol,
-    [data-testid="stChatMessage"] ul {
-        color: #D0E8FF !important;
-    }
     [data-testid="stChatMessage"] ol li,
-    [data-testid="stChatMessage"] ul li {
-        color: #D0E8FF !important;
-        font-size: 23px !important;
-    }
+    [data-testid="stChatMessage"] ul li { color: #D0E8FF !important; font-size: 23px !important; }
 
+    /* ── Citation & answer boxes ────────────────────────────── */
     .citation-box {
         background-color: #161B22;
         border-left: 3px solid #238636;
@@ -116,7 +201,6 @@ st.markdown("""
         font-family: monospace;
         color: #A8D8A8 !important;
     }
-
     .answer-box {
         background-color: #161B22;
         border: 1px solid #30363D;
@@ -128,135 +212,24 @@ st.markdown("""
         line-height: 1.7 !important;
     }
 
-    /* ALL buttons — friendly green with border */
-    .stButton > button {
-        background-color: #238636 !important;
-        color: #FFFFFF !important;
-        border: 2px solid #2EA043 !important;
-        font-size: 18px !important;
-        border-radius: 6px !important;
-        transition: all 0.2s ease !important;
-    }
-    /* Hover — white background, green text */
-    .stButton > button:hover {
-        background-color: #FFFFFF !important;
-        color: #238636 !important;
-        border: 2px solid #238636 !important;
-    }
+    /* ── Chat input ─────────────────────────────────────────── */
+    .stChatInput input { font-size: 18px !important; }
 
-    /* Clear All Documents — transparent with charcoal border */
-    [data-testid="stSidebar"] .stButton > button {
-        background-color: transparent !important;
-        color: #2C2C2C !important;
-        border: 1.5px solid #2C2C2C !important;
-    }
-    [data-testid="stSidebar"] .stButton > button:hover {
-        background-color: rgba(0,0,0,0.1) !important;
-        color: #1A1A1A !important;
-        border: 1.5px solid #1A1A1A !important;
-    }
-
-    /* Browse Files button — match Clear All style */
-    [data-testid="stFileUploadDropzone"] button {
-        background-color: transparent !important;
-        color: #2C2C2C !important;
-        border: 1.5px solid #2C2C2C !important;
-        border-radius: 6px !important;
-        font-size: 18px !important;
-    }
-    [data-testid="stFileUploadDropzone"] button:hover {
-        background-color: rgba(0,0,0,0.1) !important;
-        color: #1A1A1A !important;
-        border: 1.5px solid #1A1A1A !important;
-    }
-
-    /* Tab buttons — override completely */
-    .stTabs [data-baseweb="tab"] {
-        font-size: 18px !important;
-        color: #E6EDF3 !important;
-        background-color: transparent !important;
-        border: none !important;
-    }
-    .stTabs [data-baseweb="tab"]:hover {
-        color: #58A6FF !important;
-        background-color: transparent !important;
-    }
-    .stTabs [aria-selected="true"] {
+    /* ── Status labels ──────────────────────────────────────── */
+    .status-success { color: #2EA043 !important; font-weight: bold !important; font-size: 18px !important; }
+    .status-skip    { color: #5A3E00 !important; font-weight: bold; }
+    .status-error   { color: #7A0000 !important; font-weight: bold; }
+    [data-testid="stSidebar"] #ollama-status,
+    [data-testid="stSidebar"] #ollama-status * {
         color: #2EA043 !important;
-        border-bottom: 3px solid #2EA043 !important;
         background-color: transparent !important;
     }
 
-    /* Tab underline indicators — force green, kill red */
-    .stTabs [data-baseweb="tab-highlight"] {
-        background-color: #2EA043 !important;
-    }
-    .stTabs [data-baseweb="tab-border"] {
-        background-color: #30363D !important;
-    }
-
-    //* Slider — kill green container box */
-    [data-testid="stSlider"] > div > div > div {
-        background-color: transparent !important;
-    }
-    /* Slider filled track — green */
-    [data-testid="stSlider"] [data-baseweb="slider"] > div > div {
-        background-color: #238636 !important;
-    }
-    /* Slider thumb — green, no red */
-    [data-testid="stSlider"] [role="slider"] {
-        background-color: #2EA043 !important;
-        border: 3px solid #2EA043 !important;
-        box-shadow: none !important;
-    }
-    /* Slider unfilled track */
-    [data-testid="stSlider"] [data-baseweb="slider"] > div {
-        background-color: #4A7A99 !important;
-    }
-    [data-testid="stSlider"] span {
-        color: #2C2C2C !important;
-    }
-
-    /* Chat input */
-    .stChatInput input {
-        font-size: 18px !important;
-    }
-
-    /* Status text */
-    .status-success {
-        color: #2EA043 !important;
-        font-weight: bold !important;
-        font-size: 18px !important;
-    }
-    .status-skip { color: #5A3E00 !important; font-weight: bold; }
-    .status-error { color: #7A0000 !important; font-weight: bold; }
-
-    /* Force Ollama status green — must be last rule */
-    #ollama-status {
-        color: #2EA043 !important;
-    }
-
-    /* Browse Files — target Streamlit's internal upload button */
-    [data-testid="stFileUploaderDropzoneInstructions"] ~ div button,
-    [data-testid="stBaseButton-secondary"] {
-        background-color: transparent !important;
-        color: #2C2C2C !important;
-        border: 1.5px solid #2C2C2C !important;
-        border-radius: 6px !important;
-        font-size: 18px !important;
-    }
-    [data-testid="stBaseButton-secondary"]:hover {
-        background-color: rgba(0,0,0,0.1) !important;
-        color: #1A1A1A !important;
-        border: 1.5px solid #1A1A1A !important;
-    }
-    /* Redaction tab checkbox labels */
+    /* ── Redaction checkboxes ───────────────────────────────── */
     [data-testid="stCheckbox"] label,
-    [data-testid="stCheckbox"] p {
-        color: #D0E8FF !important;
-        font-size: 18px !important;
-    }
-    /* Export buttons — bright border and text */
+    [data-testid="stCheckbox"] p { color: #D0E8FF !important; font-size: 18px !important; }
+
+    /* ── Download buttons ───────────────────────────────────── */
     [data-testid="stDownloadButton"] button {
         background-color: transparent !important;
         color: #D0E8FF !important;
@@ -267,7 +240,7 @@ st.markdown("""
     [data-testid="stDownloadButton"] button:hover {
         background-color: rgba(208,232,255,0.1) !important;
         color: #FFFFFF !important;
-        border: 1.5px solid #FFFFFF !important;
+        border-color: #FFFFFF !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -374,6 +347,7 @@ with st.sidebar:
     # Settings
     st.markdown("### Settings")
     top_k = st.slider("Chunks to retrieve", min_value=3, max_value=10, value=5)
+    st.caption("Higher = more context, slower response")
     st.markdown("**Retrieval Strategy**")
     retrieval_mode = st.selectbox(
         "Mode",
@@ -388,14 +362,11 @@ with st.sidebar:
         ),
         key="retrieval_mode"
     )
-    st.caption("Higher = more context, slower response")
 
 
 # ── Main Area ─────────────────────────────────────────────────────────────────
 st.markdown("# ⚖️ Document Analysis")
 st.markdown("*Fully local · Air-gapped · Attorney-client privilege protected*")
-st.markdown("---")
-
 tab1, tab2, tab3 = st.tabs(["💬 Query Documents", "📋 Summarize", "🛡️ Redact"])
 
 # ── TAB 1: Query ──────────────────────────────────────────────────────────────

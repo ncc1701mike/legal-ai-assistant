@@ -84,7 +84,8 @@ def rag_query(question: str, top_k: int = 5,
             sources.append({
                 "file": chunk["source"],
                 "page": chunk["page"],
-                "score": chunk.get("rrf_score", chunk.get("score", 0))
+                "score": chunk.get("rrf_score", chunk.get("score", 0)),
+                "rerank_score": chunk.get("rerank_score")
             })
             seen.add(key)
 

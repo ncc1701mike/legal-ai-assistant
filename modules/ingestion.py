@@ -35,13 +35,43 @@ collection = chroma_client.get_or_create_collection(
 
 
 def extract_text_from_pdf(file_path: str) -> List[Dict[str, Any]]:
-    """Extract text from PDF, returning list of {text, page} dicts."""
+    """
+    Extract text from PDF with OCR fallback for scanned pages.
+    Strategy:
+    1. Try native text extraction (fast, perfect for digital PDFs)
+    2. If page has no extractable text, run Tesseract OCR via PyMuPDF
+    """
     pages = []
     doc = pymupdf.open(file_path)
+    
     for page_num, page in enumerate(doc, start=1):
+        # Stage 1: Try native text extraction
         text = page.get_text().strip()
-        if text:
-            pages.append({"text": text, "page": page_num})
+        
+        if text and len(text) > 20:
+            # Digital PDF page — use native text
+            pages.append({
+                "text": text,
+                "page": page_num,
+                "ocr": False
+            })
+        else:
+            # Stage 2: Scanned page — run OCR via Tesseract
+            try:
+                tp = page.get_textpage_ocr(flags=0, language="eng", dpi=300, full=True)
+                ocr_text = page.get_text(textpage=tp).strip()
+                if ocr_text and len(ocr_text) > 20:
+                    pages.append({
+                        "text": ocr_text,
+                        "page": page_num,
+                        "ocr": True
+                    })
+                    logging.info(f"OCR extracted {len(ocr_text)} chars from page {page_num}")
+                else:
+                    logging.warning(f"OCR returned no text for page {page_num}")
+            except Exception as e:
+                logging.error(f"OCR failed on page {page_num}: {e}")
+    
     doc.close()
     return pages
 

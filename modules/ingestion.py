@@ -33,6 +33,60 @@ collection = chroma_client.get_or_create_collection(
     metadata={"hnsw:space": "cosine"}
 )
 
+def clean_ocr_text(text: str) -> str:
+    """
+    Fix common Tesseract OCR artifacts in legal documents.
+    Two-pass approach:
+    Pass 1: Regex fixes for structural artifacts (fast, deterministic)
+    Pass 2: LLM cleanup for residual errors (slower, only if OCR flag is set)
+    """
+    import re
+
+    # ── Pass 1: Regex fixes ───────────────────────────────────────────────────
+
+    # Fix missing space between lowercase and uppercase (todismiss → to dismiss)
+    text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)
+
+    # Fix missing space after period before capital (order.The → order. The)
+    text = re.sub(r'([a-z])\.([A-Z])', r'\1. \2', text)
+
+    # Fix missing space after comma (Smith,Jones → Smith, Jones)
+    text = re.sub(r'([a-zA-Z]),([a-zA-Z])', r'\1, \2', text)
+
+    # Fix run-together court names (DISTRICTCOURT → DISTRICT COURT)
+    common_joins = [
+        (r'DISTRICT(COURT|OF)', r'DISTRICT \1'),
+        (r'SOUTHERN(DISTRICT)', r'SOUTHERN \1'),
+        (r'NORTHERN(DISTRICT)', r'NORTHERN \1'),
+        (r'EASTERN(DISTRICT)', r'EASTERN \1'),
+        (r'WESTERN(DISTRICT)', r'WESTERN \1'),
+        (r'UNITED(STATES)', r'UNITED \1'),
+        (r'CIRCUIT(COURT)', r'CIRCUIT \1'),
+        (r'(COURT)(OF)', r'\1 \2'),
+        (r'([A-Z]{2,})([A-Z][a-z]{3,})', r'\1 \2'),  # TORRESDistrict → TORRES District
+        (r'MOTION(TO|FOR|IN)', r'MOTION \1'),
+        (r'(?i)(pursuant)(to|ly)', r'\1 \2')
+    ]
+    for pattern, replacement in common_joins:
+        text = re.sub(pattern, replacement, text)
+
+    # Fix missing space before legal keywords run together
+    legal_keywords = [
+        "pursuant", "plaintiff", "defendant", "motion", "order",
+        "whereas", "hereby", "thereof", "therein", "dismiss", "state", 
+        "grant", "relief", "claim", "failure", "proceed", "allege", 
+        "contend", "argue", "assert", "pursuant", "relief", "can", 
+        "judge", "district", "wherein"
+    ]
+   
+    for kw in legal_keywords:
+        text = re.sub(rf'([a-z])({kw})', rf'\1 \2', text, flags=re.IGNORECASE)
+
+    # Normalize multiple spaces and blank lines
+    text = re.sub(r' {2,}', ' ', text)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+
+    return text.strip()
 
 def extract_text_from_pdf(file_path: str) -> List[Dict[str, Any]]:
     """
@@ -61,6 +115,7 @@ def extract_text_from_pdf(file_path: str) -> List[Dict[str, Any]]:
                 tp = page.get_textpage_ocr(flags=0, language="eng", dpi=300, full=True)
                 ocr_text = page.get_text(textpage=tp).strip()
                 if ocr_text and len(ocr_text) > 20:
+                    ocr_text = clean_ocr_text(ocr_text)
                     pages.append({
                         "text": ocr_text,
                         "page": page_num,

@@ -387,6 +387,12 @@ with tab1:
                         unsafe_allow_html=True
                     )
 
+    # Clear conversation button
+    if st.session_state.get("messages"):
+        if st.button("🗑️ Clear Conversation", key="clear_chat"):
+            st.session_state.messages = []
+            st.rerun()
+
     # Query input
     if query := st.chat_input("e.g. Who are the parties in this case?"):
         docs = get_ingested_documents()
@@ -579,24 +585,77 @@ with tab3:
                         )
 
                     with export_col2:
-                        # Generate DOCX in memory
                         from docx import Document as DocxDocument
+                        from docx.shared import Pt, RGBColor
+                        from docx.enum.text import WD_ALIGN_PARAGRAPH
                         from io import BytesIO
                         doc = DocxDocument()
-                        doc.add_heading("REDACTED DOCUMENT", level=1)
-                        doc.add_paragraph(f"Source: {redact_file.name}")
-                        doc.add_paragraph(f"Redactions: {report['total_redactions']}")
-                        doc.add_paragraph("─" * 50)
-                        for para in redacted_content.split("\n"):
-                            if para.strip():
-                                doc.add_paragraph(para)
+
+                        # Header
+                        title = doc.add_heading("REDACTED DOCUMENT", level=1)
+                        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+                        meta = doc.add_paragraph()
+                        meta.add_run(f"Source: ").bold = True
+                        meta.add_run(redact_file.name)
+                        meta2 = doc.add_paragraph()
+                        meta2.add_run(f"Total redactions: ").bold = True
+                        meta2.add_run(str(report['total_redactions']))
+                        doc.add_paragraph("─" * 60)
+
+                        # Body with highlighted placeholders
+                        import re
+                        placeholder_pattern = re.compile(r'\[([A-Z_]+)\]')
+                        for line in redacted_content.split("\n"):
+                            if not line.strip():
+                                continue
+                            para = doc.add_paragraph()
+                            last_end = 0
+                            for match in placeholder_pattern.finditer(line):
+                                # Text before placeholder
+                                if match.start() > last_end:
+                                    para.add_run(line[last_end:match.start()])
+                                # Highlighted placeholder
+                                run = para.add_run(match.group())
+                                run.bold = True
+                                run.font.color.rgb = RGBColor(0xC0, 0x00, 0x00)
+                                run.font.highlight_color = 7  # yellow
+                                last_end = match.end()
+                            # Remaining text
+                            if last_end < len(line):
+                                para.add_run(line[last_end:])
+
+                        # Placeholder legend at end
+                        doc.add_paragraph("─" * 60)
+                        legend_title = doc.add_paragraph()
+                        legend_title.add_run("PLACEHOLDER LEGEND").bold = True
+                        legend = {
+                            "[PARTY_NAME]": "Person / party name",
+                            "[ORGANIZATION]": "Company, court, or institution",
+                            "[LOCATION]": "City, state, or address",
+                            "[DATE]": "Date or date range",
+                            "[CASE_NO]": "Case or docket number",
+                            "[SSN]": "Social security number",
+                            "[PHONE]": "Phone number",
+                            "[EMAIL]": "Email address",
+                            "[FINANCIAL_AMOUNT]": "Dollar amount",
+                            "[BAR_NO]": "Attorney bar number",
+                        }
+                        for placeholder, description in legend.items():
+                            if placeholder in redacted_content:
+                                p = doc.add_paragraph(style='List Bullet')
+                                r = p.add_run(placeholder)
+                                r.bold = True
+                                r.font.color.rgb = RGBColor(0xC0, 0x00, 0x00)
+                                p.add_run(f" — {description}")
+
                         docx_buffer = BytesIO()
                         doc.save(docx_buffer)
                         docx_buffer.seek(0)
                         st.download_button(
-                            label="📝 Export as DOCX",
+                            label="📝 Export as DOCX Template",
                             data=docx_buffer.getvalue(),
-                            file_name=f"{Path(redact_file.name).stem}_REDACTED.docx",
+                            file_name=f"{Path(redact_file.name).stem}_TEMPLATE.docx",
                             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                             use_container_width=True
                         )

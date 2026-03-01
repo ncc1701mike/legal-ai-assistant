@@ -311,13 +311,35 @@ def format_context(chunks: List[Dict[str, Any]]) -> str:
 
     context_parts = []
     for i, chunk in enumerate(chunks, start=1):
-        score = chunk.get("rrf_score", chunk.get("score", 0))
-        method = chunk.get("method", "vector")
-        context_parts.append(
-            f"[{i}] Source: {chunk['source']} | Page: {chunk['page']} "
-            f"| Relevance: {score} | Method: {method}\n{chunk['text']}"
-        )
+        score = chunk.get("rerank_score", chunk.get("rrf_score", chunk.get("score", 0)))
+        source = chunk['source']
+        page = chunk['page']
+        
+        # Derive human-readable description from filename
+        name = source.lower()
+        if "deposition" in name or "transcript" in name:
+            description = "Deposition / Witness Testimony"
+        elif "complaint" in name:
+            description = "Legal Complaint"
+        elif "settlement" in name:
+            description = "Settlement Agreement"
+        elif "memo" in name:
+            description = "Internal Legal Memorandum"
+        elif "order" in name or "ruling" in name:
+            description = "Court Order / Judicial Ruling"
+        else:
+            ext = source.rsplit(".", 1)[-1].upper() if "." in source else "DOC"
+            description = {"PDF": "Legal Document (PDF)", "DOCX": "Word Document", "TXT": "Text Document"}.get(ext, "Document")
 
+        header = (
+            f"[DOCUMENT {i}]\n"
+            f"  FILE: {source}\n"
+            f"  DESCRIPTION: {description}\n"
+            f"  PAGE: {page}\n"
+            f"  RELEVANCE SCORE: {round(float(score), 3) if score else 'N/A'}\n"
+        )
+        context_parts.append(f"{header}\n{chunk['text']}")
+    
     return "\n\n---\n\n".join(context_parts)
 
 

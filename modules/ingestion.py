@@ -164,21 +164,49 @@ def extract_text(file_path: str) -> List[Dict[str, Any]]:
 
 
 def chunk_pages(pages: List[Dict], source: str) -> List[Dict[str, Any]]:
-    """Split extracted pages into chunks with metadata."""
+    """
+    Split extracted pages into chunks with metadata.
+    Uses section-aware splitting for legal documents:
+    - Splits first on legal section boundaries (headings, clauses, paragraphs)
+    - Falls back to character-based splitting for long prose sections
+    - Preserves section headers by including them in overlap
+    """
+    # Legal document section markers — split here first
+    legal_separators = [
+        "\n\n\n",           # Triple newline — major section break
+        "\n\n",             # Double newline — paragraph break
+        "\nWHEREAS",        # Contract recital
+        "\nNOW, THEREFORE", # Contract operative clause
+        "\nIN WITNESS",     # Signature block
+        "\n1. ", "\n2. ", "\n3. ", "\n4. ", "\n5. ",
+        "\n6. ", "\n7. ", "\n8. ", "\n9. ", "\n10. ", # Numbered sections
+        "\nI. ", "\nII. ", "\nIII. ", "\nIV. ", "\nV. ",
+        "\nVI. ", "\nVII. ", "\nVIII. ", "\nIX. ", "\nX. ",  # Roman numeral sections
+        "\nA. ", "\nB. ", "\nC. ", "\nD. ", "\nE. ",  # Lettered subsections
+        "\nCOUNT ", "\nCLAIM ", "\nCAUSE OF ACTION",  # Complaint sections
+        "\nQ:", "\nA:",     # Deposition Q&A turns
+        "\n\n",             # Fallback paragraph
+        "\n", ". ", " ", ""
+    ]
+
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE,
         chunk_overlap=CHUNK_OVERLAP,
-        separators=["\n\n", "\n", ". ", " ", ""]
+        separators=legal_separators
     )
+
     chunks = []
     for page in pages:
         splits = splitter.split_text(page["text"])
         for i, split in enumerate(splits):
+            if not split.strip():
+                continue
             chunks.append({
-                "text": split,
-                "source": source,
-                "page": page["page"],
-                "chunk_index": i
+                "text":        split,
+                "source":      source,
+                "page":        page["page"],
+                "chunk_index": i,
+                "ocr":         page.get("ocr", False)
             })
     return chunks
 

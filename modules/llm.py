@@ -9,17 +9,25 @@ from typing import List, Dict, Any
 PRIMARY_MODEL = "llama3.1:8b"
 FALLBACK_MODEL = "phi4:14b"
 
-SYSTEM_PROMPT = """You are a very bright and amazing legal document analysis assistant helping a \
-litigation attorney during the discovery phase of a case. You are precise, \
-thorough, and always cite your sources. 
+SYSTEM_PROMPT = """You are an exceptionally bright and capable legal document analyst helping a litigation \
+attorney during the discovery phase of a case. You are precise, thorough, and always \
+cite your sources.
 
-When referencing information from documents, always include the document name \
-and page number in your response using this format: (Source: filename, Page X)
-
-Never fabricate information. If the context provided does not contain enough \
-information to answer the question, say so clearly and explicitly. Do not guess."""
-
-
+CRITICAL RULES FOR USING DOCUMENT CONTEXT:
+1. Each document chunk is labeled with [DOCUMENT N] followed by FILE, DESCRIPTION, and PAGE.
+2. Always use the DESCRIPTION field to identify what kind of document you are citing.
+   - "Deposition / Witness Testimony" = testimony from a witness, not a court ruling
+   - "Court Order / Judicial Ruling" = the judge's analysis and holdings
+   - "Internal Legal Memorandum" = privileged internal advice, not public record
+   - "Legal Complaint" = allegations made by plaintiff's counsel
+   - "Settlement Agreement" = negotiated terms between parties
+3. When a Court Order DISCUSSES what a witness said, that is the COURT's characterization,
+   not the witness's direct testimony. Attribute it to the court, not the witness.
+4. When the same fact appears in multiple documents, note which document is the primary
+   source (e.g., the complaint alleges X; the court order confirmed X; the expert corroborated X).
+5. Never fabricate information. If the context does not contain enough information to
+   answer the question, say so clearly. Do not guess.
+6. Always cite sources using: (Source: filename, Page X)"""
 # ── Core LLM Interface ────────────────────────────────────────────────────────
 def get_llm(model: str = PRIMARY_MODEL, temperature: float = 0.0) -> ChatOllama:
     """Returns a ChatOllama instance connected to the local Ollama server."""
@@ -30,30 +38,45 @@ def get_llm(model: str = PRIMARY_MODEL, temperature: float = 0.0) -> ChatOllama:
     )
 
 
-def query_llm(prompt: str, context: str = "", model: str = PRIMARY_MODEL) -> str:
+def query_llm(prompt: str, context: str = "", model: str = PRIMARY_MODEL,
+              multihop: bool = False) -> str:
     """
     Send a query to the local LLM with optional RAG context.
     Returns the model's response as a string.
     """
     llm = get_llm(model=model)
-
     messages = [SystemMessage(content=SYSTEM_PROMPT)]
-
     if context:
-        messages.append(HumanMessage(content=f"""Use the following document \
-excerpts to answer the question. Cite the source filename and page number for \
-each piece of information you use.
+        if multihop:
+            instruction = """You have been provided with evidence gathered across \
+multiple retrieval passes from several legal documents. Some chunks are from the \
+initial retrieval, others are from targeted follow-up searches designed to fill \
+specific gaps.
+
+Your task is to SYNTHESIZE across all documents and DRAW INFERENCES where the \
+evidence permits. Specifically:
+- If Document A recommends action X and Document B shows action Y occurred instead, \
+explicitly state that the recommendation was not followed and cite both documents.
+- If a timeline can be reconstructed across documents, reconstruct it.
+- If the corpus does not contain evidence of an outcome, say so clearly — but first \
+check whether the outcome can be INFERRED from what IS present.
+- Do not summarize each document separately. Synthesize them into a single coherent answer.
+
+Cite every factual claim with (Source: filename, Page X)."""
+        else:
+            instruction = """Use the following document excerpts to answer the \
+question. Cite the source filename and page number for each piece of information \
+you use. Provide a clear, structured answer with citations."""
+
+        messages.append(HumanMessage(content=f"""{instruction}
 
 DOCUMENT CONTEXT:
 {context}
 
 QUESTION:
-{prompt}
-
-Provide a clear, structured answer with citations."""))
+{prompt}"""))
     else:
         messages.append(HumanMessage(content=prompt))
-
     response = llm.invoke(messages)
     return response.content
 
@@ -73,7 +96,7 @@ def rag_query(question: str, top_k: int = 5,
     from modules.retrieval import retrieve_and_format
 
     context, chunks = retrieve_and_format(question, top_k=top_k, mode=mode)
-    answer = query_llm(question, context=context)
+    answer = query_llm(question, context=context, multihop=(mode == "multihop"))
 
     # Build clean citations list
     sources = []
@@ -85,7 +108,7 @@ def rag_query(question: str, top_k: int = 5,
                 "file": chunk["source"],
                 "page": chunk["page"],
                 "score": chunk.get("rrf_score", chunk.get("score", 0)),
-                "rerank_score": chunk.get("rerank_score")
+                "rerank_score": chunk.get("rerank_score") or chunk.get("rrf_score") or chunk.get("score")
             })
             seen.add(key)
 

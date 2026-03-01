@@ -2,7 +2,7 @@
 
 **Fully local · Air-gapped · Attorney-client privilege protected**
 
-Amicus AI is a privacy-first legal document analysis tool built for litigation attorneys. It runs entirely locally — no documents, queries, or responses ever leave the computer. Built with Llama 3.1 8B, ChromaDB, and a three-stage retrieval pipeline evaluated against a synthetic legal corpus.
+Amicus AI is a privacy-first legal document analysis tool built for litigation attorneys. It runs entirely on your local machine — no documents, queries, or responses ever leave your computer. Built with Llama 3.1 8B, ChromaDB, and a three-stage retrieval pipeline evaluated against a synthetic legal corpus.
 
 ---
 

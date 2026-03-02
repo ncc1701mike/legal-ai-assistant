@@ -12,6 +12,7 @@ logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
 
 import streamlit as st
 from dotenv import load_dotenv
+from modules.retrieval import retrieve_and_format, normalize_score
 
 from modules.ingestion import ingest_document, get_ingested_documents, clear_all_documents
 from modules.redaction import redact_document
@@ -383,7 +384,7 @@ with tab1:
                     st.markdown(
                         f'<div class="citation-box">'
                         f'📄 {source["file"]} — Page {source["page"]} '
-                        f'(relevance: {source.get("rerank_score") or source.get("score") or 0:.3f})'
+                        f'(confidence: {normalize_score(source)}/10)'
                         f'</div>',
                         unsafe_allow_html=True
                     )
@@ -423,7 +424,7 @@ with tab1:
                         st.markdown(
                             f'<div class="citation-box">'
                             f'📄 {source["file"]} — Page {source["page"]} '
-                            f'(relevance: {source.get("rerank_score") or source.get("score") or 0:.3f})'
+                            f'(confidence: {normalize_score(source)}/10)'
                             f'</div>',
                             unsafe_allow_html=True
                         )

@@ -20,6 +20,49 @@ embedding_model = SentenceTransformer(EMBEDDING_MODEL, cache_folder="./db/embedd
 # At module level, after embedding_model initialization
 _cross_encoder = None
 
+# ── Normalize Score ───────────────────────────────────────────────────────────
+def normalize_score(chunk: Dict[str, Any]) -> float:
+    """
+    Normalize raw retrieval scores to a consistent 0.0–10.0 confidence scale.
+
+    Rerank (cross-encoder logits, range roughly -10 to +8):
+        Sigmoid transformation — maps 0 → 5.0, +4 → ~8.5, -4 → ~1.5
+        Most natural representation of the cross-encoder's actual confidence.
+
+    Vector (cosine similarity, range 0.35–0.75 in practice):
+        Linear stretch from [0.30, 0.80] → [0, 10]
+
+    Hybrid / RRF (range 0.0–0.15 in practice):
+        Linear stretch from [0.0, 0.15] → [0, 10]
+    """
+    import math
+
+    rerank = chunk.get("rerank_score")
+    rrf    = chunk.get("rrf_score")
+    vector = chunk.get("score")
+
+    if rerank is not None:
+        # Sigmoid centered at 0, scaled so +8 → ~9.7, -8 → ~0.3
+        sig = 1 / (1 + math.exp(-rerank * 0.5))
+        return round(sig * 10, 1)
+
+    if rrf is not None:
+        # RRF scores cluster tightly — fall back to vector score if available
+        # for more meaningful separation between results
+        if vector is not None:
+            clamped = max(0.30, min(float(vector), 0.80))
+            return round(((clamped - 0.30) / 0.50) * 10, 1)
+        clamped = max(0.0, min(float(rrf), 0.15))
+        return round((clamped / 0.15) * 10, 1)
+
+    if vector is not None:
+        # Linear: clamp to [0.30, 0.80], stretch to [0, 10]
+        clamped = max(0.30, min(float(vector), 0.80))
+        return round(((clamped - 0.30) / 0.50) * 10, 1)
+
+    return 0.0
+
+
 def _get_cross_encoder():
     global _cross_encoder
     if _cross_encoder is None:
@@ -357,7 +400,11 @@ def retrieve_and_format(query: str, top_k: int = 5,
         (formatted_context_string, raw_chunks_list)
     """
     
-    if mode == "hyde":
+    if mode == "multihop":
+        from modules.multihop import multihop_retrieve_and_format
+        return multihop_retrieve_and_format(query, top_k=top_k)
+    elif mode == "hyde":
+    #if mode == "hyde":
         chunks = hyde_retrieve(query, top_k=top_k * 2)
     elif mode == "bm25":
         chunks = bm25_retrieve(query, top_k=top_k * 2)

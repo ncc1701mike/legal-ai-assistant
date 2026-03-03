@@ -18,6 +18,7 @@ from modules.ingestion import ingest_document, get_ingested_documents, clear_all
 from modules.redaction import redact_document
 from modules.search import search_case_law, lookup_citation  # ⚠️ Requires internet — disabled for Shenelle's deployment
 from modules.llm import rag_query, summarize_documents, test_connection
+from modules.retrieval import normalize_score
 
 load_dotenv()
 

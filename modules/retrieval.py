@@ -88,7 +88,7 @@ def retrieve(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
     """
     query_embedding = embedding_model.encode(query).tolist()
 
-    results = _get_collection.query(
+    results = _get_collection().query(
         query_embeddings=[query_embedding],
         n_results=top_k,
         include=["documents", "metadatas", "distances"]
@@ -113,9 +113,9 @@ def hyde_retrieve(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
     hyde_embedding = embedding_model.encode(hypothetical).tolist()
 
     # Fetch large pool to ensure diversity across documents
-    fetch_n = min(top_k * 6, _get_collection.count())
+    fetch_n = min(top_k * 6, _get_collection().count())
 
-    results = _get_collection.query(
+    results = _get_collection().query(
         query_embeddings=[hyde_embedding],
         n_results=fetch_n,
         include=["documents", "metadatas", "distances"]
@@ -190,11 +190,11 @@ def bm25_retrieve(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
 def _get_all_chunks() -> List[Dict[str, Any]]:
     """Fetch all chunks from ChromaDB for BM25 indexing."""
     try:
-        count = _get_collection.count()
+        count = _get_collection().count()
         if count == 0:
             return []
 
-        results = _get_collection.get(
+        results = _get_collection().get(
             limit=count,
             include=["documents", "metadatas"]
         )

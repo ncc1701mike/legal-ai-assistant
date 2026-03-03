@@ -12,7 +12,7 @@ from sentence_transformers import SentenceTransformer
 import chromadb
 from rank_bm25 import BM25Okapi
 
-from modules.ingestion import CHROMA_PATH, COLLECTION_NAME, EMBEDDING_MODEL
+from modules.ingestion import CHROMA_PATH, COLLECTION_NAME, EMBEDDING_MODEL, chroma_client, _get_collection
 
 # ── Initialize Components ─────────────────────────────────────────────────────
 embedding_model = SentenceTransformer(EMBEDDING_MODEL, cache_folder="./db/embeddings")
@@ -70,11 +70,14 @@ def _get_cross_encoder():
         _cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", max_length=512)
     return _cross_encoder
 
-chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
-collection = chroma_client.get_or_create_collection(
-    name=COLLECTION_NAME,
-    metadata={"hnsw:space": "cosine"}
-)
+
+def _get_collection():
+    """Always fetch the current collection via ingestion's shared client.
+    Single client instance ensures clear_all_documents() is always reflected."""
+    return chroma_client.get_or_create_collection(
+        name=COLLECTION_NAME,
+        metadata={"hnsw:space": "cosine"}
+    )
 
 
 # ── Strategy 1: Standard Vector Retrieval ────────────────────────────────────
@@ -85,7 +88,7 @@ def retrieve(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
     """
     query_embedding = embedding_model.encode(query).tolist()
 
-    results = collection.query(
+    results = _get_collection.query(
         query_embeddings=[query_embedding],
         n_results=top_k,
         include=["documents", "metadatas", "distances"]
@@ -110,9 +113,9 @@ def hyde_retrieve(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
     hyde_embedding = embedding_model.encode(hypothetical).tolist()
 
     # Fetch large pool to ensure diversity across documents
-    fetch_n = min(top_k * 6, collection.count())
+    fetch_n = min(top_k * 6, _get_collection.count())
 
-    results = collection.query(
+    results = _get_collection.query(
         query_embeddings=[hyde_embedding],
         n_results=fetch_n,
         include=["documents", "metadatas", "distances"]
@@ -187,11 +190,11 @@ def bm25_retrieve(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
 def _get_all_chunks() -> List[Dict[str, Any]]:
     """Fetch all chunks from ChromaDB for BM25 indexing."""
     try:
-        count = collection.count()
+        count = _get_collection.count()
         if count == 0:
             return []
 
-        results = collection.get(
+        results = _get_collection.get(
             limit=count,
             include=["documents", "metadatas"]
         )

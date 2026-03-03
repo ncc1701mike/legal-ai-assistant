@@ -12,7 +12,7 @@ logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
 
 import streamlit as st
 from dotenv import load_dotenv
-from modules.retrieval import retrieve_and_format, normalize_score
+from modules.ingestion import CHROMA_PATH, COLLECTION_NAME, EMBEDDING_MODEL, chroma_client
 
 from modules.ingestion import ingest_document, get_ingested_documents, clear_all_documents
 from modules.redaction import redact_document
@@ -252,9 +252,8 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "ingested_docs" not in st.session_state:
     st.session_state.ingested_docs = get_ingested_documents()
-if "confirm_clear" not in st.session_state:
-    st.session_state.confirm_clear = False
-
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = 0
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## ⚖️ Amicus Ai")
@@ -284,7 +283,8 @@ with st.sidebar:
         "Drop files here",
         type=["pdf", "docx", "xlsx", "xls", "txt", "csv"],
         accept_multiple_files=True,
-        help="Supported: PDF, Word, Excel, TXT, CSV"
+        help="Supported: PDF, Word, Excel, TXT, CSV",
+        key=f"uploader_{st.session_state.uploader_key}"
     )
 
     if uploaded_files:
@@ -297,9 +297,10 @@ with st.sidebar:
                     ) as tmp:
                         tmp.write(uploaded_file.getbuffer())
                         tmp_path = tmp.name
-
-                    result = ingest_document(tmp_path, original_name=uploaded_file.name)
-                    os.unlink(tmp_path)
+                    try:
+                        result = ingest_document(tmp_path, original_name=uploaded_file.name)
+                    finally:
+                        os.unlink(tmp_path)
 
                     if result["status"] == "success":
                         st.markdown(
@@ -326,22 +327,11 @@ with st.sidebar:
 
         st.markdown("---")
         if st.button("🗑️ Clear All Documents", key="clear_docs"):
-            st.session_state.confirm_clear = True
-
-        if st.session_state.get("confirm_clear"):
-            st.warning("⚠️ This will remove all documents from the vector store. Are you sure?")
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("Yes, Clear All", key="confirm_yes"):
-                    clear_all_documents()
-                    st.session_state.ingested_docs = []
-                    st.session_state.confirm_clear = False
-                    st.session_state.messages = []
-                    st.rerun()
-            with col2:
-                if st.button("Cancel", key="confirm_no"):
-                    st.session_state.confirm_clear = False
-                    st.rerun()
+            clear_all_documents()
+            st.session_state.ingested_docs = []
+            st.session_state.messages = []
+            st.session_state.uploader_key += 1
+            st.rerun()
     else:
         st.markdown("*No documents uploaded yet*")
 
@@ -497,13 +487,11 @@ with tab3:
                         use_container_width=True):
                 for placeholder in all_categories:
                     st.session_state[f"redact_{placeholder}"] = True
-                st.rerun()
         with col_b:
             if st.button("☐ Clear All", key="clear_all_redact",
                         use_container_width=True):
                 for placeholder in all_categories:
                     st.session_state[f"redact_{placeholder}"] = False
-                st.rerun()
 
         selected_categories = []
         for placeholder, description in all_categories.items():

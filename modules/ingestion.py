@@ -26,12 +26,14 @@ EMBEDDING_MODEL = "all-MiniLM-L6-v2"  # fast, local, no external calls
 
 # ── Initialize Components ─────────────────────────────────────────────────────
 embedding_model = SentenceTransformer(EMBEDDING_MODEL, cache_folder="./db/embeddings")
-
 chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
-collection = chroma_client.get_or_create_collection(
-    name=COLLECTION_NAME,
-    metadata={"hnsw:space": "cosine"}
-)
+
+def _get_collection():
+    """Single source of truth for the ChromaDB collection."""
+    return chroma_client.get_or_create_collection(
+        name=COLLECTION_NAME,
+        metadata={"hnsw:space": "cosine"}
+    )
 
 def clean_ocr_text(text: str) -> str:
     """
@@ -289,7 +291,7 @@ def embed_and_store(chunks: List[Dict], doc_id: str) -> int:
     ids = [f"{doc_id}_chunk_{i}" for i in range(len(chunks))]
     metadatas = [{"source": c["source"], "page": c["page"]} for c in chunks]
 
-    collection.upsert(
+    _get_collection().upsert(
         ids=ids,
         embeddings=embeddings,
         documents=texts,
@@ -333,27 +335,12 @@ def ingest_document(file_path: str, original_name: str = None) -> Dict[str, Any]
 
 def get_ingested_documents() -> List[str]:
     """Return list of unique source documents currently in the vector store."""
-    results = collection.get(include=["metadatas"])
+    results = _get_collection().get(include=["metadatas"])
     sources = set(m["source"] for m in results["metadatas"] if m)
     return sorted(list(sources))
 
 
 def clear_all_documents() -> None:
     """Wipe the entire ChromaDB collection — removes all ingested documents."""
-    global collection
     chroma_client.delete_collection(COLLECTION_NAME)
-    collection = chroma_client.get_or_create_collection(
-        name=COLLECTION_NAME,
-        metadata={"hnsw:space": "cosine"}
-    )
-
-if __name__ == "__main__":
-    import sys
-    if len(sys.argv) > 1:
-        path = sys.argv[1]
-        print(f"\nIngesting: {path}")
-        result = ingest_document(path)
-        print(f"\n✅ Done: {result}")
-        print(f"\nDocuments in store: {get_ingested_documents()}")
-    else:
-        print("Usage: python modules/ingestion.py <path-to-document>")
+    _get_collection()  # Recreate fresh empty collection

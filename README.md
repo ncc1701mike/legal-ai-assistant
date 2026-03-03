@@ -4,6 +4,12 @@
 
 Amicus AI is a privacy-first legal document analysis tool built for litigation attorneys. It runs entirely on your local machine — no documents, queries, or responses ever leave your computer. Built with Llama 3.1 8B, ChromaDB, and a three-stage retrieval pipeline evaluated against a synthetic legal corpus.
 
+## 📹 Demo Video
+[Watch the 5-minute Loom demo →](https://www.loom.com/share/26a183025d574435bc41a3c34d036c60)
+
+## 📄 Written Deliverable
+[Project Deliverable — Tasks 1–7](docs/Amicus_AI_Project_Deliverable.docx)
+
 ---
 
 ## Table of Contents

@@ -345,13 +345,10 @@ with st.sidebar:
         "Retrieval Mode",
         options=["rerank", "hybrid", "vector", "multihop"],
         index=0,
-        help=(
-            "Rerank: Best overall strategy for complex questions — reranks chunks using cross-encoder\n"
-            "Hybrid: Best for general questions — combines semantic + keyword search\n"
-            "Vector: Fast semantic similarity search\n"
-            "HyDE: Best for conceptual queries — generates hypothetical answer first\n"
-            "BM25: Best for exact legal terms, statute numbers, case citations"
-        ),
+        help="""- rerank — Best overall. Hybrid retrieval → cross-encoder reranking. Highest precision.
+- multihop — Best for complex cross-document inference. Adds ~20s latency.
+- hybrid — Best for exact citations, case numbers, statute references. HyDE + BM25 + RRF fusion.
+- vector — Fastest. Simple semantic similarity. Good for single-document lookups.""",
         key="retrieval_mode"
     )
 
@@ -689,10 +686,8 @@ with tab3:
 # ── TAB 4: Case Law Search ────────────────────────────────────────────────────
 with tab4:
     st.markdown("### 🔍 Case Law Search")
-
     if "search_enabled" not in st.session_state:
         st.session_state.search_enabled = False
-
     col_toggle1, col_toggle2 = st.columns([1, 5])
     with col_toggle1:
         if st.session_state.search_enabled:
@@ -705,10 +700,9 @@ with tab4:
                 st.rerun()
     with col_toggle2:
         if st.session_state.search_enabled:
-            st.success("✅ Case law search is **ACTIVE** — network requests enabled")
+            st.error("🔓 **Air-gap is OFF** — Network active. Do not upload client documents during this session.", icon="⚠️")
         else:
-            st.warning("⚠️ **Network Required** — This feature queries CourtListener's public database and requires an internet connection. It is **disabled by default** to maintain air-gap security.", icon="🔒")
-
+            st.warning("🔒 **Activating will disable air-gap security.** Clear all documents from the store before proceeding.", icon="🛡️")
     SEARCH_ENABLED = st.session_state.search_enabled
 
     col1, col2 = st.columns([3, 1])

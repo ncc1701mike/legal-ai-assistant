@@ -3,7 +3,11 @@
 
 from langchain_ollama import ChatOllama
 from langchain_core.messages import HumanMessage, SystemMessage
+from langsmith import traceable
 from typing import List, Dict, Any
+from modules.cache import get_cached_query, set_cached_query
+
+
 
 # ── Model Configuration ───────────────────────────────────────────────────────
 PRIMARY_MODEL = "llama3.1:8b"
@@ -38,6 +42,7 @@ def get_llm(model: str = PRIMARY_MODEL, temperature: float = 0.0) -> ChatOllama:
     )
 
 
+@traceable(name="query_llm")
 def query_llm(prompt: str, context: str = "", model: str = PRIMARY_MODEL,
               multihop: bool = False) -> str:
     """
@@ -82,6 +87,8 @@ QUESTION:
 
 
 # ── RAG Query Engine ──────────────────────────────────────────────────────────
+
+@traceable(name="rag_query")
 def rag_query(question: str, top_k: int = 5, 
               mode: str = "hybrid") -> Dict[str, Any]:
     """
@@ -95,10 +102,15 @@ def rag_query(question: str, top_k: int = 5,
     """
     from modules.retrieval import retrieve_and_format
 
+    # Check cache first
+    cached = get_cached_query(question, mode, top_k)
+    if cached is not None:
+        cached["from_cache"] = True
+        return cached
+
+    from modules.retrieval import retrieve_and_format
     context, chunks = retrieve_and_format(question, top_k=top_k, mode=mode)
     answer = query_llm(question, context=context, multihop=(mode == "multihop"))
-
-    # Build clean citations list
     sources = []
     seen = set()
     for chunk in chunks:
@@ -111,15 +123,17 @@ def rag_query(question: str, top_k: int = 5,
                 "rerank_score": chunk.get("rerank_score") or chunk.get("rrf_score") or chunk.get("score")
             })
             seen.add(key)
-
-    return {
+    result = {
         "question": question,
         "answer": answer,
         "sources": sources,
         "chunks": chunks,
         "chunks_used": len(chunks)
     }
+    set_cached_query(question, mode, top_k, result)
+    return result
 
+@traceable(name="summarize_documents")
 def summarize_documents(document_names: List[str] = None) -> str:
     """
     Generate an executive summary of all ingested documents or a subset.

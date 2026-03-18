@@ -11,8 +11,8 @@ from typing import List, Dict, Any, Tuple
 from sentence_transformers import SentenceTransformer
 import chromadb
 from rank_bm25 import BM25Okapi
-
 from modules.ingestion import CHROMA_PATH, COLLECTION_NAME, EMBEDDING_MODEL, chroma_client, _get_collection
+from langsmith import traceable
 
 # ── Initialize Components ─────────────────────────────────────────────────────
 embedding_model = SentenceTransformer(EMBEDDING_MODEL, cache_folder="./db/embeddings")
@@ -81,6 +81,7 @@ def _get_collection():
 
 
 # ── Strategy 1: Standard Vector Retrieval ────────────────────────────────────
+@traceable(name="retrieve")
 def retrieve(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
     """
     Embed the query locally and search ChromaDB for the most relevant chunks.
@@ -214,6 +215,7 @@ def _get_all_chunks() -> List[Dict[str, Any]]:
 
 
 # ── Strategy 4: Hybrid RRF Retrieval ─────────────────────────────────────────
+@traceable(name="hybrid_retrieve")
 def hybrid_retrieve(query: str, top_k: int = 5,
                     use_hyde: bool = True) -> List[Dict[str, Any]]:
     """
@@ -290,6 +292,7 @@ def hybrid_retrieve(query: str, top_k: int = 5,
 
 
 # ── Strategy 5: Hybrid + Cross-Encoder Reranker ───────────────────────────
+@traceable(name="rerank_retrieve")
 def rerank_retrieve(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
     """
     Three-stage retrieval pipeline:
@@ -388,7 +391,7 @@ def format_context(chunks: List[Dict[str, Any]]) -> str:
     
     return "\n\n---\n\n".join(context_parts)
 
-
+@traceable(name="retrieve_and_format")
 def retrieve_and_format(query: str, top_k: int = 5,
                         mode: str = "hybrid") -> Tuple[str, List[Dict]]:
     """

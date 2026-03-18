@@ -19,6 +19,7 @@ from modules.redaction import redact_document
 from modules.search import search_case_law, lookup_citation  # ⚠️ Requires internet — disabled for Shenelle's deployment
 from modules.llm import rag_query, summarize_documents, test_connection
 from modules.retrieval import normalize_score
+from modules.cache import clear_cache
 
 load_dotenv()
 
@@ -329,6 +330,7 @@ with st.sidebar:
         st.markdown("---")
         if st.button("🗑️ Clear All Documents", key="clear_docs"):
             clear_all_documents()
+            clear_cache()
             st.session_state.ingested_docs = []
             st.session_state.messages = []
             st.session_state.uploader_key += 1
@@ -338,19 +340,23 @@ with st.sidebar:
 
     # Settings
     st.markdown("### Settings")
-    top_k = st.slider("Chunks to retrieve", min_value=3, max_value=10, value=7)
-    st.caption("Higher = more context, slower response")
-    st.markdown("**Retrieval Strategy**")
-    retrieval_mode = st.selectbox(
-        "Retrieval Mode",
-        options=["rerank", "hybrid", "vector", "multihop"],
-        index=0,
-        help="""- rerank — Best overall. Hybrid retrieval → cross-encoder reranking. Highest precision.
-- multihop — Best for complex cross-document inference. Adds ~20s latency.
-- hybrid — Best for exact citations, case numbers, statute references. HyDE + BM25 + RRF fusion.
-- vector — Fastest. Simple semantic similarity. Good for single-document lookups.""",
-        key="retrieval_mode"
+    top_k = st.slider("Speed vs. Performance", min_value=3, max_value=10, value=7)
+    st.caption("Lower provides a faster response — higher provides a more in-depth response at the cost of speed.")
+    st.markdown("**Analysis Mode**")
+    _mode_label = st.selectbox(
+        "Analysis Mode",
+        options=["Basic", "Advanced", "Expert"],
+        index=1,
+        help=""" 
+- Basic — Fast, reliable analysis. Best for straightforward document lookup and single-file queries.
+
+- Advanced — Highest precision. Retrieves and reranks the most relevant passages before answering. Recommended for most cases.
+
+- Expert — Deep cross-document reasoning. Best for complex queries that require connecting facts across multiple files. Adds ~20s processing time.""",
+        key="retrieval_mode_label"
     )
+    _mode_map = {"Basic": "hybrid", "Advanced": "rerank", "Expert": "multihop"}
+    retrieval_mode = _mode_map[_mode_label]
 
 
 # ── Main Area ─────────────────────────────────────────────────────────────────

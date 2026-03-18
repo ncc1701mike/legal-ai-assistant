@@ -23,7 +23,7 @@ from langchain_ollama import ChatOllama
 
 from modules.retrieval import rerank_retrieve, format_context
 from modules.llm import PRIMARY_MODEL
-
+from langsmith import traceable
 
 # ── State Definition ──────────────────────────────────────────────────────────
 class MultiHopState(TypedDict):
@@ -37,6 +37,7 @@ class MultiHopState(TypedDict):
 
 
 # ── Node 1: Initial Retrieval ─────────────────────────────────────────────────
+@traceable(name="initial_retrieve")
 def initial_retrieve(state: MultiHopState) -> MultiHopState:
     """
     Standard rerank retrieval — same as rerank mode.
@@ -48,6 +49,7 @@ def initial_retrieve(state: MultiHopState) -> MultiHopState:
 
 
 # ── Node 2: Extract Gaps ──────────────────────────────────────────────────────
+@traceable(name="extract_gaps")
 def extract_gaps(state: MultiHopState) -> MultiHopState:
     """
     LLM reads the initial chunks and identifies:
@@ -201,6 +203,7 @@ def build_multihop_graph() -> StateGraph:
 # ── Public Interface ──────────────────────────────────────────────────────────
 _graph = None  # Module-level cache — build once, reuse
 
+@traceable(name="multihop_retrieve_and_format")
 def multihop_retrieve_and_format(
     query: str,
     top_k: int = 7

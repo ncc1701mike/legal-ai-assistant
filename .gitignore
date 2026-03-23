@@ -220,3 +220,6 @@ __marimo__/
 >>>>>>> ebcb0bcc42d4abd1356d68d0d71d43ddbfb783ca
 db/embeddings/
 db/cache/
+feedback/
+credentials.json
+sync/.gdrive_token.json

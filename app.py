@@ -245,6 +245,73 @@ st.markdown("""
         color: #FFFFFF !important;
         border-color: #FFFFFF !important;
     }
+
+
+        /* ── Sidebar app title ── */
+    [data-testid="stSidebarHeader"] a,
+    [data-testid="stSidebarHeader"] span,
+    [data-testid="stSidebarHeader"] p,
+    .st-emotion-cache-1cypcdb,
+    header[data-testid="stHeader"] ~ div [data-testid="stSidebar"] a {
+        color: #02C39A !important;
+    }
+
+    /* ── Document store file names ── */
+    [data-testid="stFileUploaderFile"] *,
+    [data-testid="stFileUploaderFile"] small,
+    [data-testid="stFileUploaderFile"] span {
+        color: #c8ecec !important;
+        font-family: 'Share Tech Mono', monospace !important;
+        font-size: 11px !important;
+    }
+
+    /* ── Slider caption text ── */
+    [data-testid="stCaptionContainer"] p,
+    [data-testid="stCaptionContainer"] span,
+    .stSlider + div p,
+    .stSlider ~ [data-testid="stText"] {
+        color: #8ababa !important;
+        font-size: 11px !important;
+    }
+
+        /* ── Hide heading anchor link on hover ── */
+    h1 a[href], h2 a[href], h3 a[href] {
+        display: none !important;
+    }
+    [data-testid="stHeadingWithActionElements"] a {
+        display: none !important;
+    }
+
+    /* ── Hide sidebar collapse button icon text ── */
+    [data-testid="stSidebarCollapseButton"] span,
+    [data-testid="stSidebarCollapseButton"] div {
+        font-size: 0 !important;
+        color: transparent !important;
+    }
+
+        /* ── Sidebar title 15% larger ── */
+    [data-testid="stSidebarHeader"] *,
+    [data-testid="stSidebarNav"] * {
+        font-size: 1.95rem !important;
+    }
+
+        /* ── Sidebar title glow ── */
+    [data-testid="stSidebar"] a,
+    [data-testid="stSidebar"] a *,
+    [data-testid="stSidebar"] a span,
+    [data-testid="stSidebarHeader"],
+    [data-testid="stSidebarHeader"] * {
+        text-shadow: 0 0 12px rgba(255, 255, 255, 0.54),
+                    0 0 30px rgba(220, 240, 240, 0.36) !important;
+    }
+
+    /* ── Sidebar section labels glow ── */
+    [data-testid="stSidebar"] h3 {
+        text-shadow: 0 0 8px rgba(255, 255, 255, 0.48),
+                    0 0 20px rgba(220, 240, 240, 0.30) !important;
+        letter-spacing: 3px !important;
+    }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -360,6 +427,224 @@ with st.sidebar:
 
 
 # ── Main Area ─────────────────────────────────────────────────────────────────
+# ── Visual Polish & Sparkles ──────────────────────────────────────────────────
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Share+Tech+Mono&display=swap');
+
+/* ── Scale everything up 20% ── */
+html { font-size: 19.2px !important; }
+
+/* ── Gradient title ── */
+h1 {
+    font-family: 'Rajdhani', sans-serif !important;
+    font-weight: 700 !important;
+    font-size: 2.6rem !important;
+    background: linear-gradient(135deg, #ffffff 0%, #03e8b5 50%, #02a8b8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: 0.03em !important;
+    filter: drop-shadow(0 0 18px rgba(2, 195, 154, 0.35));
+}
+
+/* ── Subheadings ── */
+h2 {
+    font-family: 'Rajdhani', sans-serif !important;
+    font-weight: 700 !important;
+    color: #03e8b5 !important;
+    letter-spacing: 0.05em !important;
+    font-size: 1.6rem !important;
+}
+h3 {
+    font-family: 'Share Tech Mono', monospace !important;
+    font-size: 0.8rem !important;
+    letter-spacing: 3px !important;
+    text-transform: uppercase !important;
+    color: #02C39A !important;
+}
+
+/* ── Sidebar title ── */
+[data-testid="stSidebarHeader"] *,
+[data-testid="stSidebarNav"] * {
+    color: #03e8b5 !important;
+    font-family: 'Rajdhani', sans-serif !important;
+    font-weight: 700 !important;
+    font-size: 1.3rem !important;
+}
+
+/* ── Sidebar accent line ── */
+[data-testid="stSidebar"]::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #02C39A, #028090, transparent);
+    z-index: 999;
+}
+
+/* ── Active tab glow ── */
+[data-testid="stTabs"] [role="tab"][aria-selected="true"] {
+    color: #03e8b5 !important;
+    text-shadow: 0 0 12px rgba(2, 195, 154, 0.8) !important;
+    border-bottom: 2px solid #02C39A !important;
+}
+
+/* ── Query input glow on focus ── */
+[data-testid="stTextArea"] textarea:focus,
+[data-testid="stTextInput"] input:focus {
+    box-shadow: 0 0 0 1px rgba(2, 195, 154, 0.5),
+                0 0 25px rgba(2, 195, 154, 0.15) !important;
+    border-color: #02C39A !important;
+}
+
+/* ── Primary button shimmer ── */
+[data-testid="stButton"] > button[kind="primary"] {
+    font-family: 'Rajdhani', sans-serif !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase !important;
+    transition: all 0.25s ease !important;
+    box-shadow: 0 4px 15px rgba(2, 195, 154, 0.3) !important;
+}
+[data-testid="stButton"] > button[kind="primary"]:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 28px rgba(2, 195, 154, 0.5) !important;
+}
+
+/* ── Citation expanders — left accent bar ── */
+[data-testid="stExpander"] {
+    border-left: 3px solid #02C39A !important;
+    border-radius: 0 10px 10px 0 !important;
+    transition: all 0.25s ease !important;
+}
+[data-testid="stExpander"]:hover {
+    box-shadow: -3px 0 18px rgba(2, 195, 154, 0.25),
+                0 4px 20px rgba(2, 195, 154, 0.1) !important;
+    transform: translateX(2px) !important;
+}
+
+/* ── Slider thumb glow ── */
+[data-testid="stSlider"] [role="slider"] {
+    box-shadow: 0 0 10px rgba(2, 195, 154, 0.8),
+                0 0 25px rgba(2, 195, 154, 0.4) !important;
+}
+
+/* ── Document file name tags ── */
+[data-testid="stFileUploaderFile"] * {
+    font-family: 'Share Tech Mono', monospace !important;
+    color: #03e8b5 !important;
+    font-size: 0.75rem !important;
+}
+
+/* ── Custom scrollbar ── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #02C39A, #028090);
+    border-radius: 3px;
+}
+
+/* ── Fade-up entrance on content ── */
+[data-testid="stVerticalBlock"] > div {
+    animation: fadeUp 0.35s ease-out both;
+}
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+</style>
+
+<script>
+(function() {
+    const canvas = document.createElement('canvas');
+    canvas.id = 'amicus-canvas';
+    canvas.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:9999;opacity:0.5;';
+    document.body.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+    function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+    resize();
+    window.addEventListener('resize', resize);
+
+    const COLORS = ['#02C39A','#028090','#00A896','#F4C430','#ffffff','#5DCAA5'];
+    const particles = [];
+
+    class P {
+        constructor(x, y, burst) {
+            this.x = x !== undefined ? x : Math.random() * canvas.width;
+            this.y = y !== undefined ? y : canvas.height + 10;
+            this.size = Math.random() * (burst ? 3 : 2) + 0.5;
+            this.vy = -(Math.random() * (burst ? 2.5 : 0.5) + (burst ? 0.5 : 0.15));
+            this.vx = (Math.random() - 0.5) * (burst ? 3 : 0.3);
+            this.alpha = Math.random() * 0.7 + 0.2;
+            this.color = COLORS[Math.floor(Math.random() * COLORS.length)];
+            this.twinkle = Math.random() * Math.PI * 2;
+            this.ts = Math.random() * 0.03 + 0.01;
+            this.star = Math.random() > 0.65;
+            this.burst = burst || false;
+            this.life = burst ? 120 : Infinity;
+        }
+        update() {
+            this.x += this.vx;
+            this.y += this.vy;
+            this.twinkle += this.ts;
+            this.currentAlpha = this.alpha * (0.5 + 0.5 * Math.sin(this.twinkle));
+            if (this.burst) { this.life--; this.currentAlpha *= (this.life / 120); }
+            return this.y > -20 && (!this.burst || this.life > 0);
+        }
+        draw() {
+            ctx.save();
+            ctx.globalAlpha = Math.max(0, this.currentAlpha);
+            ctx.fillStyle = this.color;
+            ctx.shadowBlur = 6;
+            ctx.shadowColor = this.color;
+            if (this.star) {
+                ctx.translate(this.x, this.y);
+                ctx.beginPath();
+                for (let i = 0; i < 5; i++) {
+                    const a1 = (i * 72 - 90) * Math.PI / 180;
+                    const a2 = (i * 72 - 54) * Math.PI / 180;
+                    ctx.lineTo(Math.cos(a1) * this.size * 1.6, Math.sin(a1) * this.size * 1.6);
+                    ctx.lineTo(Math.cos(a2) * this.size * 0.6, Math.sin(a2) * this.size * 0.6);
+                }
+                ctx.closePath();
+                ctx.fill();
+            } else {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+    }
+
+    for (let i = 0; i < 70; i++) {
+        const p = new P();
+        p.y = Math.random() * canvas.height;
+        particles.push(p);
+    }
+
+    function loop() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (let i = particles.length - 1; i >= 0; i--) {
+            if (!particles[i].update()) {
+                if (!particles[i].burst) particles[i] = new P();
+                else particles.splice(i, 1);
+            } else {
+                particles[i].draw();
+            }
+        }
+        requestAnimationFrame(loop);
+    }
+    loop();
+
+    document.addEventListener('click', e => {
+        for (let i = 0; i < 14; i++) particles.push(new P(e.clientX, e.clientY, true));
+    });
+})();
+</script>
+""", unsafe_allow_html=True)
+
 st.markdown("# ⚖️ Document Analysis")
 st.markdown("*Fully local · Air-gapped · Attorney-client privilege protected*")
 tab1, tab2, tab3, tab4 = st.tabs(["💬 Query Documents", "📋 Summarize", "🛡️ Redact", "🔍 Case Law"])

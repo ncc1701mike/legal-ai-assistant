@@ -13,7 +13,10 @@ logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
 import streamlit as st
 from dotenv import load_dotenv
 from modules.ingestion import CHROMA_PATH, COLLECTION_NAME, EMBEDDING_MODEL, chroma_client
-
+from modules.feedback import (
+    log_feedback, log_redaction_feedback,
+    check_and_log_auto_failures, get_feedback_stats
+)
 from modules.ingestion import ingest_document, get_ingested_documents, clear_all_documents
 from modules.redaction import redact_document
 from modules.search import search_case_law, lookup_citation  # ⚠️ Requires internet — disabled for Shenelle's deployment
@@ -693,10 +696,7 @@ with tab1:
                                         top_k=st.session_state.get("top_k", 5),
                                         mode=st.session_state.get("retrieval_mode", "rerank")
                                     )
-
                 st.markdown(result["answer"])
-
-                # Show citations
                 if result["sources"]:
                     st.markdown("**Sources:**")
                     for source in result["sources"]:
@@ -708,12 +708,100 @@ with tab1:
                             unsafe_allow_html=True
                         )
 
+            # Auto-failure detection
+            _conf_scores = [
+                normalize_score(s)
+                for s in result.get("sources", [])
+            ]
+            
+            _doc_list = [s["file"] for s in result.get("sources", [])]
+            _mode = st.session_state.get("retrieval_mode", "rerank")
+            check_and_log_auto_failures(
+                query=query,
+                response=result["answer"],
+                mode=_mode,
+                top_k=st.session_state.get("top_k", 7),
+                chunks_used=result.get("chunks_used", 0),
+                confidence_scores=_conf_scores,
+                document_list=_doc_list,
+                tab="query",
+            )
+
+            # Store result in session state for feedback UI persistence
+            st.session_state["last_result"] = {
+                "query": query,
+                "answer": result["answer"],
+                "sources": result.get("sources", []),
+                "chunks_used": result.get("chunks_used", 0),
+                "mode": _mode,
+                "top_k": st.session_state.get("top_k", 7),
+                "conf_scores": _conf_scores,
+                "doc_list": _doc_list,
+            }
+            st.session_state["show_feedback"] = True
+            st.session_state["feedback_submitted"] = False
+
             # Save to history
             st.session_state.messages.append({
                 "role": "assistant",
                 "content": result["answer"],
                 "sources": result["sources"]
             })
+
+    # ── Feedback UI — rendered outside chat block, persists on rerun ──────────
+    if st.session_state.get("show_feedback") and not st.session_state.get("feedback_submitted"):
+        lr = st.session_state.get("last_result", {})
+        if lr:
+            st.markdown("---")
+            st.caption("Was this response helpful?")
+            fb_col1, fb_col2, _ = st.columns([1, 1, 8])
+            with fb_col1:
+                if st.button("👍", key="fb_up", help="Good response"):
+                    log_feedback(
+                        feedback_type="thumbs_up",
+                        query=lr["query"],
+                        response=lr["answer"],
+                        mode=lr["mode"],
+                        top_k=lr["top_k"],
+                        sources=lr["sources"],
+                        chunks_used=lr["chunks_used"],
+                        confidence_scores=lr["conf_scores"],
+                        document_list=lr["doc_list"],
+                        tab="query",
+                    )
+                    st.session_state["show_feedback"] = False
+                    st.session_state["feedback_submitted"] = True
+                    st.toast("Thanks for the feedback! ✔")
+                    st.rerun()
+            with fb_col2:
+                if st.button("👎", key="fb_down", help="Poor response"):
+                    st.session_state["show_thumbs_down_comment"] = True
+
+            if st.session_state.get("show_thumbs_down_comment"):
+                _comment = st.text_input(
+                    "What was wrong? (optional)",
+                    key="fb_comment",
+                    placeholder="e.g. missed the termination date, wrong party name..."
+                )
+                if st.button("Submit feedback", key="fb_submit"):
+                    log_feedback(
+                        feedback_type="thumbs_down",
+                        query=lr["query"],
+                        response=lr["answer"],
+                        mode=lr["mode"],
+                        top_k=lr["top_k"],
+                        sources=lr["sources"],
+                        chunks_used=lr["chunks_used"],
+                        confidence_scores=lr["conf_scores"],
+                        document_list=lr["doc_list"],
+                        comment=_comment if _comment else None,
+                        tab="query",
+                    )
+                    st.session_state["show_feedback"] = False
+                    st.session_state["feedback_submitted"] = True
+                    st.session_state["show_thumbs_down_comment"] = False
+                    st.toast("Feedback recorded. Thank you. ✔")
+                    st.rerun()
 
 # ── TAB 2: Summarize ──────────────────────────────────────────────────────────
 with tab2:
@@ -970,9 +1058,59 @@ with tab3:
                             use_container_width=True
                         )
 
+                    # Store redaction result for persistent feedback UI
+                    st.session_state["last_redact"] = {
+                        "document_name": redact_file.name,
+                        "categories_selected": selected_categories,
+                        "redaction_count": report["total_redactions"],
+                    }
+                    st.session_state["show_redact_feedback"] = True
+                    st.session_state["redact_feedback_submitted"] = False
                     os.unlink(output_path)
                 else:
                     st.error(f"Redaction failed: {report['status']}")
+
+        # ── Redact feedback UI — outside result block, persists on rerun ─────────
+    if st.session_state.get("show_redact_feedback") and not st.session_state.get("redact_feedback_submitted"):
+        lr = st.session_state.get("last_redact", {})
+        if lr:
+            st.markdown("---")
+            st.caption("Was the redaction accurate?")
+            red_col1, red_col2, _ = st.columns([1, 1, 8])
+            with red_col1:
+                if st.button("👍", key="redact_up", help="Redaction looks correct"):
+                    log_redaction_feedback(
+                        feedback_type="thumbs_up",
+                        document_name=lr["document_name"],
+                        categories_selected=lr["categories_selected"],
+                        redaction_count=lr["redaction_count"],
+                    )
+                    st.session_state["show_redact_feedback"] = False
+                    st.session_state["redact_feedback_submitted"] = True
+                    st.toast("Thanks for the feedback! ✔")
+                    st.rerun()
+            with red_col2:
+                if st.button("👎", key="redact_down", help="Redaction missed something"):
+                    st.session_state["show_redact_comment"] = True
+            if st.session_state.get("show_redact_comment"):
+                _red_comment = st.text_input(
+                    "What was missed or incorrectly redacted? (optional)",
+                    key="redact_comment",
+                    placeholder="e.g. missed SSN on page 3, kept attorney name..."
+                )
+                if st.button("Submit", key="redact_submit"):
+                    log_redaction_feedback(
+                        feedback_type="thumbs_down",
+                        document_name=lr["document_name"],
+                        categories_selected=lr["categories_selected"],
+                        redaction_count=lr["redaction_count"],
+                        comment=_red_comment if _red_comment else None,
+                    )
+                    st.session_state["show_redact_feedback"] = False
+                    st.session_state["redact_feedback_submitted"] = True
+                    st.session_state["show_redact_comment"] = False
+                    st.toast("Feedback recorded. Thank you. ✔")
+                    st.rerun()
 
 # ── TAB 4: Case Law Search ────────────────────────────────────────────────────
 with tab4:

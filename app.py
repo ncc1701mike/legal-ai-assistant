@@ -918,7 +918,9 @@ with tab3:
 
                 if report["status"] == "success":
                     st.success(f"✅ Redaction complete — {report['total_redactions']} items redacted")
-
+                # if report["status"] == "success":
+                #     st.success(f"✅ Redaction complete — {report['total_redactions']} items redacted | categories={selected_categories} | log_len={len(report.get('redactions', []))}")
+                    
                     # Show placeholder counts
                     st.markdown("**Redaction Summary:**")
                     cols = st.columns(3)

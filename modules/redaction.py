@@ -68,6 +68,14 @@ REGEX_PATTERNS = [
     (r'(?<=\s)[A-Z]{2}\s\d{5}(?!\d)',                             "[ZIP_CODE]"),
     # ZIP after already-redacted location placeholder
     (r'(?<=\[LOCATION\]\s)\d{5}(?!\d)',                            "[ZIP_CODE]"),
+    # Leading parenthesis before capitalized name/org — (Wayland Station...
+    (r'\(([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)+)', '[ORGANIZATION]'),
+    # All-caps court headers — IN THE THIRD DISTRICT COURT
+    (r'\bIN\s+THE\s+[A-Z][A-Z\s]+(?:COURT|TRIBUNAL|CIRCUIT|DISTRICT|DIVISION)\b',
+     "[ORGANIZATION]"),
+    # All-caps org suffixes — NEXAGEN INC, WAYLAND STATION LLC, etc.
+    (r'\b(?:[A-Z]{2,}\s+){1,6}(?:INC|LLC|LLP|CORP|CO|COMPANY|ASSOCIATES|GROUP|INSTITUTE|FOUNDATION|AUTHORITY|AGENCY|SERVICES|SOLUTIONS)\b',
+     "[ORGANIZATION]"),
     # US State names standalone
     (r'\b(Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|'
      r'Delaware|Florida|Georgia|Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|'
@@ -113,7 +121,14 @@ def redact_text(text: str, aggressive: bool = False,
         redacted = re.sub(pattern, placeholder, redacted, flags=re.IGNORECASE)
 
     # ── Pass 2: spaCy NER ─────────────────────────────────────────────────────
-    doc = nlp(redacted)
+    # Pre-processing: normalize punctuation that confuses NER boundaries
+    # Fix 1: leading parenthesis before entity — (Wayland Station...
+    ner_input = re.sub(r'\(([A-Z][a-zA-Z\s]+)', r'\1', redacted)
+    # Fix 2: title-case all-caps sequences so spaCy ORG tagger fires
+    def _titlecase_allcaps(m):
+        return m.group(0).title()
+    ner_input = re.sub(r'\b[A-Z]{2,}(?:\s+[A-Z]{2,}){1,}', _titlecase_allcaps, ner_input)
+    doc = nlp(ner_input)
     
     entities = sorted(doc.ents, key=lambda e: e.start_char, reverse=True)
     
@@ -144,6 +159,18 @@ def redact_text(text: str, aggressive: bool = False,
                 + redacted[ent.end_char:]
             )
 
+    # ── Pass 3: Compound entity merge ────────────────────────────────────────
+    # Fix: partial org name before/after [ORGANIZATION] placeholder
+    redacted = re.sub(
+        r'(?<![\[\w])([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*\s+(?:at|of|for|and)\s+)\[ORGANIZATION\]',
+        lambda m: '[ORGANIZATION]',
+        redacted
+    )
+    redacted = re.sub(
+        r'\[ORGANIZATION\](\s+(?:at|of|for|and)\s+[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)',
+        '[ORGANIZATION]',
+        redacted
+    )
     report = {
         "total_redactions": len(redaction_log),
         "redactions": redaction_log,

@@ -79,6 +79,8 @@ REGEX_PATTERNS = [
     # ZIP after already-redacted location placeholder — handled in post-processing
     # Leading parenthesis before capitalized name/org — (Wayland Station...
     (r'\(([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)+)', '[ORGANIZATION]'),
+    # Numbered address + 'The <Name>' named streets e.g. 1900 The Alameda
+    (r'\b\d{3,5}\s+The\s+[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*(?:,?\s+(?:Suite|Ste|Apt|Unit|Floor|Fl)\.?\s*[\w]+)?', '[STREET_ADDRESS]'),
     # All-caps court headers — IN THE THIRD DISTRICT COURT
     (r'\bIN\s+THE\s+[A-Z][A-Z\s]+(?:COURT|TRIBUNAL|CIRCUIT|DISTRICT|DIVISION)\b',
      "[ORGANIZATION]"),
@@ -166,7 +168,10 @@ def redact_text(text: str, aggressive: bool = False,
     # ── Pass 2: spaCy NER ─────────────────────────────────────────────────────
     # Pre-processing: normalize punctuation that confuses NER boundaries
     # Fix 1: leading parenthesis before entity — (Wayland Station...
-    ner_input = re.sub(r'\(([A-Z][a-zA-Z\s]+)', r'\1', redacted)
+    # Replace paren with space (not empty) to preserve character offsets
+    ner_input = re.sub(r'\(([A-Z][a-zA-Z\s]+)', r' \1', redacted)
+    # Fix 1b: collapse multiple spaces/tabs to single space for NER
+    ner_input = re.sub(r'[ \t]{2,}', ' ', ner_input)
     # Fix 2: title-case all-caps sequences so spaCy ORG tagger fires
     def _titlecase_allcaps(m):
         return m.group(0).title()
@@ -238,6 +243,15 @@ def redact_text(text: str, aggressive: bool = False,
     for token, original in shields.items():
         redacted = redacted.replace(token, original)
 
+
+    # ── Pass 2.5: City name cleanup ──────────────────────────────────────────
+    # Catch major CA cities missed by spaCy in form/table contexts
+    _CITIES = r'\b(?:San Jose|San Francisco|Los Angeles|San Diego|Sacramento|'\
+              r'Oakland|Berkeley|Palo Alto|Santa Clara|Sunnyvale|Mountain View|'\
+              r'Menlo Park|Redwood City|San Mateo|Burlingame|Walnut Creek|'\
+              r'Fremont|San Ramon|Pleasanton|Livermore|Modesto|Fresno|'\
+              r'Long Beach|Anaheim|Santa Ana|Riverside|Bakersfield)\b'
+    redacted = re.sub(_CITIES, '[LOCATION]', redacted)
 
     # ── Pass 3: Compound entity merge ────────────────────────────────────────
     # Fix: partial org name before/after [ORGANIZATION] placeholder

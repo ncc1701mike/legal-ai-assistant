@@ -165,6 +165,11 @@ def rag_query(question: str, top_k: int = 5,
         cached["from_cache"] = True
         return cached
 
+    # Agentic RAG — full pipeline with planning, attribution, self-critique
+    if mode == "agentic":
+        from modules.agentic_rag import agentic_rag_query
+        return agentic_rag_query(question, top_k=top_k)
+
     from modules.retrieval import retrieve_and_format
     context, chunks = retrieve_and_format(question, top_k=top_k, mode=mode)
     answer = query_llm(question, context=context, multihop=(mode == "multihop"))

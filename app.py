@@ -425,7 +425,7 @@ with st.sidebar:
 - Expert — Deep cross-document reasoning. Best for complex queries that require connecting facts across multiple files. Adds ~20s processing time.""",
         key="retrieval_mode_label"
     )
-    _mode_map = {"Basic": "hybrid", "Advanced": "rerank", "Expert": "multihop"}
+    _mode_map = {"Basic": "hybrid", "Advanced": "rerank", "Expert": "agentic"}
     retrieval_mode = _mode_map[_mode_label]
 
 

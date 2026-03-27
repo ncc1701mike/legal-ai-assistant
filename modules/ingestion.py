@@ -24,6 +24,42 @@ CHUNK_SIZE = 800
 CHUNK_OVERLAP = 300
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"  # fast, local, no external calls
 
+# ── Document Type Detection ────────────────────────────────────────────────────
+def detect_document_type(source: str, text_sample: str) -> str:
+    """Infer document type from filename and content for metadata enrichment."""
+    source_lower = source.lower()
+    text_lower = text_sample[:500].lower()
+
+    if "deposition" in source_lower or "depo" in source_lower:
+        return "deposition"
+    if "complaint" in source_lower:
+        return "complaint"
+    if "answer" in source_lower and "affirmative" in text_lower:
+        return "answer"
+    if "email" in source_lower or "email_chain" in source_lower:
+        return "email_chain"
+    if "pip" in source_lower or "performance_improvement" in source_lower:
+        return "pip"
+    if "accommodation" in source_lower:
+        return "accommodation"
+    if "termination" in source_lower:
+        return "termination"
+    if "eeoc" in source_lower or "charge" in source_lower:
+        return "eeoc_charge"
+    if "medical" in source_lower or "okonkwo" in source_lower:
+        return "medical_record"
+    if "timeline" in source_lower:
+        return "timeline"
+    if "witness" in source_lower or "statement" in source_lower:
+        return "witness_statement"
+    if "damages" in source_lower or "wages" in source_lower:
+        return "damages"
+    if "deposition" in text_lower and ("q:" in text_lower or "a:" in text_lower):
+        return "deposition"
+    if "email" in text_lower and ("from:" in text_lower or "subject:" in text_lower):
+        return "email_chain"
+    return "legal_document"
+
 # ── Initialize Components ─────────────────────────────────────────────────────
 embedding_model = SentenceTransformer(EMBEDDING_MODEL, cache_folder="./db/embeddings")
 chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
@@ -223,33 +259,65 @@ def extract_text(file_path: str) -> List[Dict[str, Any]]:
 def chunk_pages(pages: List[Dict], source: str) -> List[Dict[str, Any]]:
     """
     Split extracted pages into chunks with metadata.
-    Uses section-aware splitting for legal documents:
-    - Splits first on legal section boundaries (headings, clauses, paragraphs)
-    - Falls back to character-based splitting for long prose sections
-    - Preserves section headers by including them in overlap
+    Uses document-type-aware chunking:
+    - Depositions: smaller chunks (400 chars) preserving Q&A turns with speaker context
+    - Email chains: split on email boundaries preserving sender/recipient
+    - Other legal docs: standard chunking with section-aware separators
     """
-    # Legal document section markers — split here first
-    legal_separators = [
-        "\n\n\n",           # Triple newline — major section break
-        "\n\n",             # Double newline — paragraph break
-        "\nWHEREAS",        # Contract recital
-        "\nNOW, THEREFORE", # Contract operative clause
-        "\nIN WITNESS",     # Signature block
-        "\n1. ", "\n2. ", "\n3. ", "\n4. ", "\n5. ",
-        "\n6. ", "\n7. ", "\n8. ", "\n9. ", "\n10. ", # Numbered sections
-        "\nI. ", "\nII. ", "\nIII. ", "\nIV. ", "\nV. ",
-        "\nVI. ", "\nVII. ", "\nVIII. ", "\nIX. ", "\nX. ",  # Roman numeral sections
-        "\nA. ", "\nB. ", "\nC. ", "\nD. ", "\nE. ",  # Lettered subsections
-        "\nCOUNT ", "\nCLAIM ", "\nCAUSE OF ACTION",  # Complaint sections
-        "\nQ:", "\nA:",     # Deposition Q&A turns
-        "\n\n",             # Fallback paragraph
+    # Detect document type from filename and content sample
+    sample_text = pages[0]["text"] if pages else ""
+    doc_type = detect_document_type(source, sample_text)
+
+    # Deposition-specific separators — preserve Q&A turn boundaries
+    deposition_separators = [
+        "\nQ:", "\nA:",          # Q&A turns — primary split point
+        "\n\nQ:", "\n\nA:",      # Double newline before Q&A
+        "\n\n\n",
+        "\n\n",
         "\n", ". ", " ", ""
     ]
 
+    # Email chain separators — preserve individual email boundaries
+    email_separators = [
+        "\n────────",            # Our email divider
+        "\nFROM:",               # Email header
+        "\nDate:",
+        "\n\n\n",
+        "\n\n",
+        "\n", ". ", " ", ""
+    ]
+
+    # Standard legal document separators
+    legal_separators = [
+        "\n\n\n",
+        "\n\n",
+        "\nWHEREAS", "\nNOW, THEREFORE", "\nIN WITNESS",
+        "\n1. ", "\n2. ", "\n3. ", "\n4. ", "\n5. ",
+        "\n6. ", "\n7. ", "\n8. ", "\n9. ", "\n10. ",
+        "\nI. ", "\nII. ", "\nIII. ", "\nIV. ", "\nV. ",
+        "\nA. ", "\nB. ", "\nC. ", "\nD. ", "\nE. ",
+        "\nCOUNT ", "\nCLAIM ", "\nCAUSE OF ACTION",
+        "\n\n", "\n", ". ", " ", ""
+    ]
+
+    # Choose chunk size and separators based on document type
+    if doc_type == "deposition":
+        chunk_size = 400      # Smaller — preserve individual Q&A exchanges
+        chunk_overlap = 150   # Overlap carries speaker context forward
+        separators = deposition_separators
+    elif doc_type == "email_chain":
+        chunk_size = 600      # Medium — preserve individual email context
+        chunk_overlap = 100
+        separators = email_separators
+    else:
+        chunk_size = CHUNK_SIZE
+        chunk_overlap = CHUNK_OVERLAP
+        separators = legal_separators
+
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=CHUNK_SIZE,
-        chunk_overlap=CHUNK_OVERLAP,
-        separators=legal_separators
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        separators=separators
     )
 
     chunks = []
@@ -259,11 +327,12 @@ def chunk_pages(pages: List[Dict], source: str) -> List[Dict[str, Any]]:
             if not split.strip():
                 continue
             chunks.append({
-                "text":        split,
-                "source":      source,
-                "page":        page["page"],
-                "chunk_index": i,
-                "ocr":         page.get("ocr", False)
+                "text":          split,
+                "source":        source,
+                "page":          page["page"],
+                "chunk_index":   i,
+                "ocr":           page.get("ocr", False),
+                "document_type": doc_type,
             })
     return chunks
 
@@ -289,7 +358,7 @@ def embed_and_store(chunks: List[Dict], doc_id: str) -> int:
     embeddings = embedding_model.encode(texts, show_progress_bar=False).tolist()
 
     ids = [f"{doc_id}_chunk_{i}" for i in range(len(chunks))]
-    metadatas = [{"source": c["source"], "page": c["page"]} for c in chunks]
+    metadatas = [{"source": c["source"], "page": c["page"], "document_type": c.get("document_type", "legal_document")} for c in chunks]
 
     _get_collection().upsert(
         ids=ids,

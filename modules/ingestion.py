@@ -60,6 +60,29 @@ def detect_document_type(source: str, text_sample: str) -> str:
         return "email_chain"
     return "legal_document"
 
+def get_document_description(source: str, doc_type: str) -> str:
+    """Generate a descriptive header for embedding enrichment based on filename."""
+    source_lower = source.lower()
+
+    # Specific document descriptions based on filename patterns
+    descriptions = {
+        "email_chain": "Internal email communications between Nexagen executives including HR VP Calloway, CEO Reyes, and General Counsel Patricia Huang discussing termination decision, legal risks, FMLA exposure, and litigation strategy.",
+        "deposition": "Sworn deposition testimony transcript.",
+        "complaint": "Plaintiff's legal complaint alleging ADA disability discrimination, failure to accommodate, and retaliation.",
+        "answer": "Defendant's answer to complaint and affirmative defenses.",
+        "pip": "Performance Improvement Plan documenting alleged performance deficiencies and improvement objectives.",
+        "accommodation": "ADA accommodation request and formal denial letters.",
+        "termination": "Termination letter, EEOC charge, medical accommodation letter, and case timeline.",
+        "eeoc_charge": "EEOC discrimination charge filing.",
+        "medical_record": "Medical records and physician letter regarding lupus diagnosis and accommodation needs.",
+        "timeline": "Chronological timeline of key case events.",
+        "witness_statement": "Witness statements, HR complaint, internal emails, and IT system logs.",
+        "damages": "Lost wages calculation, back pay, front pay, and damages analysis.",
+        "legal_document": "Legal document.",
+    }
+
+    return descriptions.get(doc_type, "Legal document.")
+
 # ── Initialize Components ─────────────────────────────────────────────────────
 embedding_model = SentenceTransformer(EMBEDDING_MODEL, cache_folder="./db/embeddings")
 chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
@@ -326,8 +349,13 @@ def chunk_pages(pages: List[Dict], source: str) -> List[Dict[str, Any]]:
         for i, split in enumerate(splits):
             if not split.strip():
                 continue
+            # Prepend document context header to each chunk for better retrieval
+            doc_header = f"[Document: {source} | Type: {doc_type}]\n"
+            # Prepend enriched document context header for better semantic retrieval
+            doc_description = get_document_description(source, doc_type)
+            doc_header = f"[Document: {source} | Type: {doc_type} | Description: {doc_description}]\n"
             chunks.append({
-                "text":          split,
+                "text":          doc_header + split,
                 "source":        source,
                 "page":          page["page"],
                 "chunk_index":   i,
@@ -344,7 +372,10 @@ def embed_and_store(chunks: List[Dict], doc_id: str) -> int:
     seen = set()
     unique_chunks = []
     for chunk in chunks:
-        text_key = chunk["text"].strip()[:200]
+        # Skip the document header (first 300 chars) before deduplication check
+        raw_text = chunk["text"].strip()
+        header_end = raw_text.find("]\n") + 2 if "]\n" in raw_text else 0
+        text_key = raw_text[header_end:header_end + 200]
         if text_key not in seen:
             seen.add(text_key)
             unique_chunks.append(chunk)

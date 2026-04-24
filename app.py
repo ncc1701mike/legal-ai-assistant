@@ -13,6 +13,9 @@ logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
 import streamlit as st
 from dotenv import load_dotenv
 from modules.ingestion import CHROMA_PATH, COLLECTION_NAME, EMBEDDING_MODEL, chroma_client
+from modules.case_manager import (
+    list_cases, get_active_case, set_active_case, create_case, delete_case
+)
 from modules.feedback import (
     log_feedback, log_redaction_feedback,
     check_and_log_auto_failures, get_feedback_stats
@@ -322,13 +325,122 @@ st.markdown("""
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "ingested_docs" not in st.session_state:
-    st.session_state.ingested_docs = get_ingested_documents()
 if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
+if "show_new_case_form" not in st.session_state:
+    st.session_state.show_new_case_form = False
+if "confirm_delete" not in st.session_state:
+    st.session_state.confirm_delete = False
+
+# Resolve active case on first load
+if "active_case" not in st.session_state:
+    _cases_init = list_cases()   # triggers legacy auto-register
+    _active_init = get_active_case()
+    if _active_init is None and _cases_init:
+        _active_init = _cases_init[0]["case_id"]
+        set_active_case(_active_init)
+    st.session_state.active_case = _active_init
+
+if "ingested_docs" not in st.session_state:
+    st.session_state.ingested_docs = get_ingested_documents(
+        case_id=st.session_state.get("active_case")
+    )
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## ⚖️ Amicus Ai")
+    st.markdown("---")
+
+    # ── Case Management ───────────────────────────────────────────────────────
+    st.markdown("### Active Case")
+    _all_cases = list_cases()
+
+    if not _all_cases:
+        st.markdown("*No cases yet.*")
+        if st.button("+ Create First Case", key="create_first_btn"):
+            st.session_state.show_new_case_form = True
+    else:
+        _case_ids    = [c["case_id"] for c in _all_cases]
+        _case_labels = {c["case_id"]: c["display_name"] for c in _all_cases}
+        _active      = st.session_state.get("active_case") or _case_ids[0]
+        if _active not in _case_ids:
+            _active = _case_ids[0]
+            st.session_state.active_case = _active
+            set_active_case(_active)
+
+        _active_meta = next(c for c in _all_cases if c["case_id"] == _active)
+        st.markdown(
+            f'<div style="background:rgba(2,195,154,0.15);border-left:3px solid #02C39A;'
+            f'padding:8px 12px;border-radius:4px;margin-bottom:8px;">'
+            f'<strong style="color:#02C39A !important;">{_active_meta["display_name"]}</strong>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+        if len(_all_cases) > 1:
+            _selected = st.selectbox(
+                "Switch Case",
+                options=_case_ids,
+                format_func=lambda x: _case_labels[x],
+                index=_case_ids.index(_active),
+                key="case_selector",
+            )
+            if _selected != _active:
+                st.session_state.active_case = _selected
+                set_active_case(_selected)
+                st.session_state.messages = []
+                st.session_state.ingested_docs = []
+                st.rerun()
+
+        _cb1, _cb2 = st.columns(2)
+        with _cb1:
+            if st.button("+ New Case", key="new_case_btn"):
+                st.session_state.show_new_case_form = not st.session_state.show_new_case_form
+                st.session_state.confirm_delete = False
+        with _cb2:
+            if st.button("🗑️ Delete", key="delete_case_btn"):
+                st.session_state.confirm_delete = not st.session_state.confirm_delete
+                st.session_state.show_new_case_form = False
+
+    # New Case form
+    if st.session_state.get("show_new_case_form"):
+        with st.form("new_case_form", clear_on_submit=True):
+            _nc_id   = st.text_input("Case ID (lowercase, underscores)", placeholder="e.g. smith_v_acme")
+            _nc_name = st.text_input("Display Name", placeholder="e.g. Smith v. Acme Corp")
+            _nc_desc = st.text_area("Description (optional)", height=60)
+            if st.form_submit_button("Create Case"):
+                if not _nc_id or not _nc_name:
+                    st.error("Case ID and Display Name are required.")
+                else:
+                    try:
+                        create_case(_nc_id.strip(), _nc_name.strip(), _nc_desc.strip())
+                        st.session_state.active_case = _nc_id.strip()
+                        st.session_state.show_new_case_form = False
+                        st.session_state.messages = []
+                        st.session_state.ingested_docs = []
+                        st.rerun()
+                    except ValueError as _e:
+                        st.error(str(_e))
+
+    # Delete confirmation
+    if st.session_state.get("confirm_delete") and _all_cases:
+        _del_name = next(
+            (c["display_name"] for c in _all_cases if c["case_id"] == _active), _active
+        )
+        st.warning(f"Delete **{_del_name}**? All documents will be permanently removed.")
+        _dc1, _dc2 = st.columns(2)
+        with _dc1:
+            if st.button("Yes, Delete", key="confirm_del_yes"):
+                delete_case(_active)
+                st.session_state.active_case = get_active_case()
+                st.session_state.confirm_delete = False
+                st.session_state.messages = []
+                st.session_state.ingested_docs = []
+                st.rerun()
+        with _dc2:
+            if st.button("Cancel", key="confirm_del_no"):
+                st.session_state.confirm_delete = False
+                st.rerun()
+
     st.markdown("---")
 
     # Connection status
@@ -349,57 +461,67 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # Document upload
+    # Document upload — only available when a case is active
+    _sidebar_case_id = st.session_state.get("active_case")
     st.markdown("### Upload Documents")
-    uploaded_files = st.file_uploader(
-        "Drop files here",
-        type=["pdf", "docx", "xlsx", "xls", "txt", "csv"],
-        accept_multiple_files=True,
-        help="Supported: PDF, Word, Excel, TXT, CSV",
-        key=f"uploader_{st.session_state.uploader_key}"
-    )
+    if not _sidebar_case_id:
+        st.markdown("*Create a case above to upload documents.*")
+    else:
+        uploaded_files = st.file_uploader(
+            "Drop files here",
+            type=["pdf", "docx", "xlsx", "xls", "txt", "csv"],
+            accept_multiple_files=True,
+            help="Supported: PDF, Word, Excel, TXT, CSV",
+            key=f"uploader_{st.session_state.uploader_key}"
+        )
 
-    if uploaded_files:
-        for uploaded_file in uploaded_files:
-            if uploaded_file.name not in st.session_state.ingested_docs:
-                with st.spinner(f"Processing {uploaded_file.name}..."):
-                    with tempfile.NamedTemporaryFile(
-                        delete=False,
-                        suffix=Path(uploaded_file.name).suffix
-                    ) as tmp:
-                        tmp.write(uploaded_file.getbuffer())
-                        tmp_path = tmp.name
-                    try:
-                        result = ingest_document(tmp_path, original_name=uploaded_file.name)
-                    finally:
-                        os.unlink(tmp_path)
+        if uploaded_files:
+            for uploaded_file in uploaded_files:
+                if uploaded_file.name not in st.session_state.ingested_docs:
+                    with st.spinner(f"Processing {uploaded_file.name}..."):
+                        with tempfile.NamedTemporaryFile(
+                            delete=False,
+                            suffix=Path(uploaded_file.name).suffix
+                        ) as tmp:
+                            tmp.write(uploaded_file.getbuffer())
+                            tmp_path = tmp.name
+                        try:
+                            result = ingest_document(
+                                tmp_path,
+                                original_name=uploaded_file.name,
+                                case_id=_sidebar_case_id,
+                            )
+                        finally:
+                            os.unlink(tmp_path)
 
-                    if result["status"] == "success":
-                        st.markdown(
-                            f'<p class="status-success">✓ {uploaded_file.name}'
-                            f' ({result["chunks"]} chunks)</p>',
-                            unsafe_allow_html=True
-                        )
-                        st.session_state.ingested_docs = get_ingested_documents()
-                    else:
-                        st.markdown(
-                            f'<p class="status-skip">⚠ {uploaded_file.name}'
-                            f' — {result["status"]}</p>',
-                            unsafe_allow_html=True
-                        )
+                        if result["status"] == "success":
+                            st.markdown(
+                                f'<p class="status-success">✓ {uploaded_file.name}'
+                                f' ({result["chunks"]} chunks)</p>',
+                                unsafe_allow_html=True
+                            )
+                            st.session_state.ingested_docs = get_ingested_documents(
+                                case_id=_sidebar_case_id
+                            )
+                        else:
+                            st.markdown(
+                                f'<p class="status-skip">⚠ {uploaded_file.name}'
+                                f' — {result["status"]}</p>',
+                                unsafe_allow_html=True
+                            )
 
     st.markdown("---")
 
     # Document inventory
     st.markdown("### Documents in Store")
-    docs = get_ingested_documents()
+    docs = get_ingested_documents(case_id=_sidebar_case_id)
     if docs:
         for doc in docs:
             st.markdown(f"📄 `{doc}`")
 
         st.markdown("---")
         if st.button("🗑️ Clear All Documents", key="clear_docs"):
-            clear_all_documents()
+            clear_all_documents(case_id=_sidebar_case_id)
             clear_cache()
             st.session_state.ingested_docs = []
             st.session_state.messages = []
@@ -650,6 +772,30 @@ h3 {
 
 st.markdown("# ⚖️ Document Analysis")
 st.markdown("*Fully local · Air-gapped · Attorney-client privilege protected*")
+
+# ── Onboarding — shown when no cases exist ────────────────────────────────────
+if not list_cases() or not st.session_state.get("active_case"):
+    st.markdown("---")
+    st.markdown(
+        """
+        <div style="text-align:center; padding: 60px 20px;">
+            <div style="font-size: 72px; margin-bottom: 24px;">⚖️</div>
+            <h2 style="color:#02C39A; font-size:2rem; margin-bottom:16px;">
+                Welcome to Amicus AI
+            </h2>
+            <p style="font-size:1.2rem; color:#A0AEC0; max-width:540px; margin:0 auto 32px;">
+                Amicus AI is a fully local, air-gapped legal research assistant.
+                Each matter lives in its own isolated document store — nothing crosses case boundaries.
+            </p>
+            <p style="font-size:1.1rem; color:#E6EDF3;">
+                👈 Use the <strong>Active Case</strong> panel in the sidebar to create your first case.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.stop()
+
 tab1, tab2, tab3, tab4 = st.tabs(["💬 Query Documents", "📋 Summarize", "🛡️ Redact", "🔍 Case Law"])
 
 # ── TAB 1: Query ──────────────────────────────────────────────────────────────
@@ -679,7 +825,7 @@ with tab1:
 
     # Query input
     if query := st.chat_input("e.g. Who are the parties in this case?"):
-        docs = get_ingested_documents()
+        docs = get_ingested_documents(case_id=st.session_state.get("active_case"))
         if not docs:
             st.warning("Please upload documents first.")
         else:
@@ -692,10 +838,11 @@ with tab1:
             with st.chat_message("assistant"):
                 with st.spinner("Searching documents and generating response..."):
                     result = rag_query(
-                                        query,
-                                        top_k=st.session_state.get("top_k", 5),
-                                        mode=st.session_state.get("retrieval_mode", "rerank")
-                                    )
+                        query,
+                        top_k=st.session_state.get("top_k", 5),
+                        mode=st.session_state.get("retrieval_mode", "rerank"),
+                        case_id=st.session_state.get("active_case"),
+                    )
                 st.markdown(result["answer"])
                 if result["sources"]:
                     st.markdown("**Sources:**")
@@ -808,7 +955,7 @@ with tab2:
     st.markdown("### Generate Document Summary")
     st.markdown("Produces a structured executive summary of all uploaded documents.")
 
-    docs = get_ingested_documents()
+    docs = get_ingested_documents(case_id=st.session_state.get("active_case"))
     if not docs:
         st.warning("Please upload documents first.")
     else:

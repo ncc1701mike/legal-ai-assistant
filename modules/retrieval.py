@@ -11,7 +11,8 @@ from typing import List, Dict, Any, Tuple
 from sentence_transformers import SentenceTransformer
 import chromadb
 from rank_bm25 import BM25Okapi
-from modules.ingestion import CHROMA_PATH, COLLECTION_NAME, EMBEDDING_MODEL, chroma_client, _get_collection
+from modules.ingestion import CHROMA_PATH, COLLECTION_NAME, EMBEDDING_MODEL, chroma_client
+from modules.ingestion import get_collection as _ingestion_get_collection
 from langsmith import traceable
 
 # ── Initialize Components ─────────────────────────────────────────────────────
@@ -71,25 +72,21 @@ def _get_cross_encoder():
     return _cross_encoder
 
 
-def _get_collection():
-    """Always fetch the current collection via ingestion's shared client.
-    Single client instance ensures clear_all_documents() is always reflected."""
-    return chroma_client.get_or_create_collection(
-        name=COLLECTION_NAME,
-        metadata={"hnsw:space": "cosine"}
-    )
+def _get_collection(case_id=None):
+    """Get the ChromaDB collection for case_id via ingestion's shared client."""
+    return _ingestion_get_collection(case_id)
 
 
 # ── Strategy 1: Standard Vector Retrieval ────────────────────────────────────
 @traceable(name="retrieve")
-def retrieve(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+def retrieve(query: str, top_k: int = 5, case_id=None) -> List[Dict[str, Any]]:
     """
     Embed the query locally and search ChromaDB for the most relevant chunks.
     Returns a list of results with text, source, page, and similarity score.
     """
     query_embedding = embedding_model.encode(query).tolist()
 
-    results = _get_collection().query(
+    results = _get_collection(case_id).query(
         query_embeddings=[query_embedding],
         n_results=top_k,
         include=["documents", "metadatas", "distances"]
@@ -109,14 +106,14 @@ def retrieve(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
 
 
 # ── Strategy 2: HyDE Retrieval ────────────────────────────────────────────────
-def hyde_retrieve(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+def hyde_retrieve(query: str, top_k: int = 5, case_id=None) -> List[Dict[str, Any]]:
     hypothetical = _generate_hypothetical_answer(query)
     hyde_embedding = embedding_model.encode(hypothetical).tolist()
 
     # Fetch large pool to ensure diversity across documents
-    fetch_n = min(top_k * 6, _get_collection().count())
+    fetch_n = min(top_k * 6, _get_collection(case_id).count())
 
-    results = _get_collection().query(
+    results = _get_collection(case_id).query(
         query_embeddings=[hyde_embedding],
         n_results=fetch_n,
         include=["documents", "metadatas", "distances"]
@@ -134,6 +131,7 @@ def hyde_retrieve(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
         })
 
     return diversify_results(chunks, top_k=top_k, max_per_source=2)
+
 
 # ── Generate Hypothetical Answer ─────────────────────────────────────────────
 def _generate_hypothetical_answer(query: str) -> str:
@@ -159,8 +157,8 @@ def _generate_hypothetical_answer(query: str) -> str:
     return response.content.strip()
 
 # ── Strategy 3: BM25 Keyword Retrieval ───────────────────────────────────────
-def bm25_retrieve(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
-    all_chunks = _get_all_chunks()
+def bm25_retrieve(query: str, top_k: int = 5, case_id=None) -> List[Dict[str, Any]]:
+    all_chunks = _get_all_chunks(case_id)
     if not all_chunks:
         return []
 
@@ -188,14 +186,14 @@ def bm25_retrieve(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
     return diversify_results(chunks, top_k=top_k, max_per_source=2)
 
 
-def _get_all_chunks() -> List[Dict[str, Any]]:
+def _get_all_chunks(case_id=None) -> List[Dict[str, Any]]:
     """Fetch all chunks from ChromaDB for BM25 indexing."""
     try:
-        count = _get_collection().count()
+        count = _get_collection(case_id).count()
         if count == 0:
             return []
 
-        results = _get_collection().get(
+        results = _get_collection(case_id).get(
             limit=count,
             include=["documents", "metadatas"]
         )
@@ -217,7 +215,7 @@ def _get_all_chunks() -> List[Dict[str, Any]]:
 # ── Strategy 4: Hybrid RRF Retrieval ─────────────────────────────────────────
 @traceable(name="hybrid_retrieve")
 def hybrid_retrieve(query: str, top_k: int = 5,
-                    use_hyde: bool = True) -> List[Dict[str, Any]]:
+                    use_hyde: bool = True, case_id=None) -> List[Dict[str, Any]]:
     """
     Hybrid retrieval using Reciprocal Rank Fusion (RRF).
     
@@ -236,15 +234,14 @@ def hybrid_retrieve(query: str, top_k: int = 5,
 
     if use_hyde:
         try:
-            semantic_chunks = hyde_retrieve(query, top_k=fetch_k)
-            
+            semantic_chunks = hyde_retrieve(query, top_k=fetch_k, case_id=case_id)
         except Exception as e:
             print(f"DEBUG HyDE failed: {e}, falling back to vector")
-            semantic_chunks = retrieve(query, top_k=fetch_k)
+            semantic_chunks = retrieve(query, top_k=fetch_k, case_id=case_id)
     else:
-        semantic_chunks = retrieve(query, top_k=fetch_k)
+        semantic_chunks = retrieve(query, top_k=fetch_k, case_id=case_id)
 
-    bm25_chunks = bm25_retrieve(query, top_k=fetch_k)
+    bm25_chunks = bm25_retrieve(query, top_k=fetch_k, case_id=case_id)
 
     # Reciprocal Rank Fusion
     k = 60  # RRF constant
@@ -293,7 +290,7 @@ def hybrid_retrieve(query: str, top_k: int = 5,
 
 # ── Strategy 5: Hybrid + Cross-Encoder Reranker ───────────────────────────
 @traceable(name="rerank_retrieve")
-def rerank_retrieve(query: str, top_k: int = 10) -> List[Dict[str, Any]]:
+def rerank_retrieve(query: str, top_k: int = 10, case_id=None) -> List[Dict[str, Any]]:
     """
     Three-stage retrieval pipeline:
     1. Fetch candidates from both semantic (HyDE) and keyword (BM25) search
@@ -308,12 +305,12 @@ def rerank_retrieve(query: str, top_k: int = 10) -> List[Dict[str, Any]]:
 
     # Stage 1a: semantic candidates via HyDE (falls back to vector on error)
     try:
-        semantic = hyde_retrieve(query, top_k=fetch_k)
+        semantic = hyde_retrieve(query, top_k=fetch_k, case_id=case_id)
     except Exception:
-        semantic = retrieve(query, top_k=fetch_k)
+        semantic = retrieve(query, top_k=fetch_k, case_id=case_id)
 
     # Stage 1b: keyword candidates via BM25
-    keyword = bm25_retrieve(query, top_k=fetch_k)
+    keyword = bm25_retrieve(query, top_k=fetch_k, case_id=case_id)
 
     # Merge and deduplicate — preserve order (semantic first for tiebreaking)
     seen = set()
@@ -325,7 +322,7 @@ def rerank_retrieve(query: str, top_k: int = 10) -> List[Dict[str, Any]]:
             candidates.append(chunk)
 
     if not candidates:
-        return retrieve(query, top_k=top_k)
+        return retrieve(query, top_k=top_k, case_id=case_id)
 
     # Stage 2: Rerank with cross-encoder
     cross_encoder = _get_cross_encoder()
@@ -406,7 +403,7 @@ def format_context(chunks: List[Dict[str, Any]]) -> str:
 
 @traceable(name="retrieve_and_format")
 def retrieve_and_format(query: str, top_k: int = 5,
-                        mode: str = "hybrid") -> Tuple[str, List[Dict]]:
+                        mode: str = "hybrid", case_id=None) -> Tuple[str, List[Dict]]:
     """
     Convenience function — retrieves and formats in one call.
     
@@ -423,17 +420,16 @@ def retrieve_and_format(query: str, top_k: int = 5,
         from modules.multihop import multihop_retrieve_and_format
         return multihop_retrieve_and_format(query, top_k=top_k)
     elif mode == "hyde":
-    #if mode == "hyde":
-        chunks = hyde_retrieve(query, top_k=top_k * 2)
+        chunks = hyde_retrieve(query, top_k=top_k * 2, case_id=case_id)
     elif mode == "bm25":
-        chunks = bm25_retrieve(query, top_k=top_k * 2)
+        chunks = bm25_retrieve(query, top_k=top_k * 2, case_id=case_id)
     elif mode == "hybrid":
-        chunks = hybrid_retrieve(query, top_k=top_k * 2, use_hyde=True)
+        chunks = hybrid_retrieve(query, top_k=top_k * 2, use_hyde=True, case_id=case_id)
     elif mode == "rerank":
-        chunks = rerank_retrieve(query, top_k=top_k)
+        chunks = rerank_retrieve(query, top_k=top_k, case_id=case_id)
         return format_context(chunks), chunks  # skip diversify — reranker handles it
     else:
-        chunks = retrieve(query, top_k=top_k * 2)
+        chunks = retrieve(query, top_k=top_k * 2, case_id=case_id)
 
     # Prevent any single document from dominating
     chunks = diversify_results(chunks, top_k=top_k, max_per_source=2)

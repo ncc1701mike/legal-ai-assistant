@@ -87,12 +87,39 @@ def get_document_description(source: str, doc_type: str) -> str:
 embedding_model = SentenceTransformer(EMBEDDING_MODEL, cache_folder="./db/embeddings")
 chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
 
-def _get_collection():
-    """Single source of truth for the ChromaDB collection."""
+
+def get_collection(case_id=None):
+    """Return the ChromaDB collection for the given case_id.
+
+    If case_id is None, falls back to the active case from case_manager, then
+    to the legacy 'legal_docs' collection so the system works before any case
+    is created.
+    """
+    if case_id is None:
+        try:
+            from modules.case_manager import get_active_case, collection_name_for
+            active = get_active_case()
+            if active is not None:
+                name = collection_name_for(active)
+                return chroma_client.get_or_create_collection(
+                    name=name, metadata={"hnsw:space": "cosine"}
+                )
+        except Exception:
+            pass
+        # Legacy fallback
+        return chroma_client.get_or_create_collection(
+            name=COLLECTION_NAME, metadata={"hnsw:space": "cosine"}
+        )
+    from modules.case_manager import collection_name_for
+    name = collection_name_for(case_id)
     return chroma_client.get_or_create_collection(
-        name=COLLECTION_NAME,
-        metadata={"hnsw:space": "cosine"}
+        name=name, metadata={"hnsw:space": "cosine"}
     )
+
+
+def _get_collection():
+    """Backward-compat wrapper — returns the collection for the active case."""
+    return get_collection()
 
 def clean_ocr_text(text: str) -> str:
     """
@@ -365,9 +392,9 @@ def chunk_pages(pages: List[Dict], source: str) -> List[Dict[str, Any]]:
     return chunks
 
 # ── Embed and Store Chunks ────────────────────────────────────────────────────
-def embed_and_store(chunks: List[Dict], doc_id: str) -> int:
+def embed_and_store(chunks: List[Dict], doc_id: str, case_id=None) -> int:
     """Embed chunks locally and store in ChromaDB. Returns chunk count."""
-    
+
     # Deduplicate chunks — prevents repeated template text from dominating
     seen = set()
     unique_chunks = []
@@ -379,19 +406,19 @@ def embed_and_store(chunks: List[Dict], doc_id: str) -> int:
         if text_key not in seen:
             seen.add(text_key)
             unique_chunks.append(chunk)
-    
+
     if len(unique_chunks) < len(chunks):
         print(f"  Deduplicated: {len(chunks)} → {len(unique_chunks)} chunks")
-    
+
     chunks = unique_chunks
-    
+
     texts = [c["text"] for c in chunks]
     embeddings = embedding_model.encode(texts, show_progress_bar=False).tolist()
 
     ids = [f"{doc_id}_chunk_{i}" for i in range(len(chunks))]
     metadatas = [{"source": c["source"], "page": c["page"], "document_type": c.get("document_type", "legal_document")} for c in chunks]
 
-    _get_collection().upsert(
+    get_collection(case_id).upsert(
         ids=ids,
         embeddings=embeddings,
         documents=texts,
@@ -400,7 +427,7 @@ def embed_and_store(chunks: List[Dict], doc_id: str) -> int:
     return len(chunks)
 
 # ── Ingest Document ───────────────────────────────────────────────────────────
-def ingest_document(file_path: str, original_name: str = None) -> Dict[str, Any]:
+def ingest_document(file_path: str, original_name: str = None, case_id=None) -> Dict[str, Any]:
     """
     Full ingestion pipeline: extract → chunk → embed → store.
     Returns a summary dict with ingestion results.
@@ -423,7 +450,7 @@ def ingest_document(file_path: str, original_name: str = None) -> Dict[str, Any]
         }
 
     print(f"  Embedding and storing {len(chunks)} chunks...")
-    stored = embed_and_store(chunks, doc_id)
+    stored = embed_and_store(chunks, doc_id, case_id=case_id)
 
     return {
         "file": file_name,
@@ -433,14 +460,38 @@ def ingest_document(file_path: str, original_name: str = None) -> Dict[str, Any]
     }
 
 
-def get_ingested_documents() -> List[str]:
+def get_ingested_documents(case_id=None) -> List[str]:
     """Return list of unique source documents currently in the vector store."""
-    results = _get_collection().get(include=["metadatas"])
+    results = get_collection(case_id).get(include=["metadatas"])
     sources = set(m["source"] for m in results["metadatas"] if m)
     return sorted(list(sources))
 
 
-def clear_all_documents() -> None:
-    """Wipe the entire ChromaDB collection — removes all ingested documents."""
-    chroma_client.delete_collection(COLLECTION_NAME)
-    _get_collection()  # Recreate fresh empty collection
+def clear_all_documents(case_id=None) -> None:
+    """Wipe the ChromaDB collection for the given case — removes all ingested documents."""
+    if case_id is None:
+        try:
+            from modules.case_manager import get_active_case, collection_name_for
+            active = get_active_case()
+            if active is not None:
+                name = collection_name_for(active)
+            else:
+                name = COLLECTION_NAME
+        except Exception:
+            name = COLLECTION_NAME
+    else:
+        from modules.case_manager import collection_name_for
+        name = collection_name_for(case_id)
+    chroma_client.delete_collection(name)
+    get_collection(case_id)  # Recreate fresh empty collection
+
+
+def list_cases() -> List[str]:
+    """Return all case IDs found in ChromaDB (amicus_* collections + legacy legal_docs)."""
+    cases = []
+    for c in chroma_client.list_collections():
+        if c.name.startswith("amicus_"):
+            cases.append(c.name[len("amicus_"):])
+        elif c.name == COLLECTION_NAME:
+            cases.append("chen_v_nexagen")
+    return sorted(cases)

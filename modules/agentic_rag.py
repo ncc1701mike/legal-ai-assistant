@@ -38,6 +38,7 @@ class AgenticState(TypedDict):
     critique_notes:  str
     revision_count:  int
     top_k:           int
+    case_id:         Optional[str]
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -185,7 +186,7 @@ def multi_pass_retrieve(state: AgenticState) -> AgenticState:
     all_chunks = []
     for sub_query in state["sub_queries"]:
         logger.info(f"[AgenticRAG]   Retrieving: {sub_query[:60]}")
-        chunks = rerank_retrieve(sub_query, top_k=state["top_k"])
+        chunks = rerank_retrieve(sub_query, top_k=state["top_k"], case_id=state.get("case_id"))
         all_chunks.extend(chunks)
 
     # Deduplicate and re-rank
@@ -410,7 +411,8 @@ _graph = None
 @traceable(name="agentic_rag_query")
 def agentic_rag_query(
     question: str,
-    top_k: int = 7
+    top_k: int = 7,
+    case_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Full agentic RAG pipeline.
@@ -433,6 +435,7 @@ def agentic_rag_query(
         "critique_notes":  "",
         "revision_count":  0,
         "top_k":           top_k,
+        "case_id":         case_id,
     }
 
     result = _graph.invoke(initial_state)

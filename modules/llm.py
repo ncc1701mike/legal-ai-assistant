@@ -146,8 +146,8 @@ QUESTION:
 # ── RAG Query Engine ──────────────────────────────────────────────────────────
 
 @traceable(name="rag_query")
-def rag_query(question: str, top_k: int = 5, 
-              mode: str = "hybrid") -> Dict[str, Any]:
+def rag_query(question: str, top_k: int = 5,
+              mode: str = "hybrid", case_id=None) -> Dict[str, Any]:
     """
     Full RAG pipeline in one call:
     1. Retrieve relevant chunks from ChromaDB
@@ -168,10 +168,10 @@ def rag_query(question: str, top_k: int = 5,
     # Agentic RAG — full pipeline with planning, attribution, self-critique
     if mode == "agentic":
         from modules.agentic_rag import agentic_rag_query
-        return agentic_rag_query(question, top_k=top_k)
+        return agentic_rag_query(question, top_k=top_k, case_id=case_id)
 
     from modules.retrieval import retrieve_and_format
-    context, chunks = retrieve_and_format(question, top_k=top_k, mode=mode)
+    context, chunks = retrieve_and_format(question, top_k=top_k, mode=mode, case_id=case_id)
     answer = query_llm(question, context=context, multihop=(mode == "multihop"))
     sources = []
     seen = set()

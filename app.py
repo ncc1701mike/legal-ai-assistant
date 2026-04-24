@@ -3,6 +3,7 @@
 # Production build — fully local, no external calls
 
 import os
+import time
 import logging
 import tempfile
 from pathlib import Path
@@ -836,52 +837,116 @@ with tab1:
                 st.markdown(query)
 
             # Get RAG response — streaming
-            _mode    = st.session_state.get("retrieval_mode", "rerank")
-            _top_k   = st.session_state.get("top_k", 5)
-            _case_id = st.session_state.get("active_case")
-            result   = {}
+            _mode        = retrieval_mode
+            _top_k       = top_k
+            _case_id     = st.session_state.get("active_case")
+            result       = {}
+            _query_start = time.time()
+
+            _mode_label_map = {
+                "hybrid": "Basic", "rerank": "Advanced", "agentic": "Expert"
+            }
 
             with st.chat_message("assistant"):
-                if _mode == "agentic":
-                    # Expert mode: show per-stage progress then stream synthesis
-                    _status_ph = st.empty()
+                # Two containers fix render order: status on top, answer below
+                _status_area = st.container()   # pipeline stages (top)
+                _answer_area = st.container()   # streaming answer (bottom)
+
+                with _answer_area:
                     _answer_ph = st.empty()
 
-                    def _agentic_progress(msg: str) -> None:
-                        _status_ph.markdown(
-                            f'<p style="color:#02C39A;font-size:0.85rem;'
-                            f'font-style:italic;">{msg}</p>',
-                            unsafe_allow_html=True,
-                        )
+                if _mode == "agentic":
+                    # Expert mode: LangGraph sub-stage progress via st.status()
+                    with _status_area:
+                        with st.status(
+                            "🧠 Planning sub-queries...", expanded=False
+                        ) as _agentic_status:
+                            def _agentic_progress(msg: str) -> None:
+                                _agentic_status.update(label=msg, state="running")
 
-                    _streamed_text = ""
-                    for _tok in stream_agentic_rag_query(
-                        query,
-                        top_k=_top_k,
-                        case_id=_case_id,
-                        progress_callback=_agentic_progress,
-                        result_holder=result,
-                    ):
-                        _streamed_text += _tok
-                        _answer_ph.markdown(_streamed_text + "▌")
+                            _streamed_text = ""
+                            for _tok in stream_agentic_rag_query(
+                                query,
+                                top_k=_top_k,
+                                case_id=_case_id,
+                                progress_callback=_agentic_progress,
+                                result_holder=result,
+                            ):
+                                _streamed_text += _tok
+                                _answer_ph.markdown(_streamed_text + "▌")
 
-                    _status_ph.empty()
+                            _agentic_status.update(label="✅ Complete", state="complete")
+
                     _final = result.get("answer", _streamed_text)
                     _answer_ph.markdown(_final)
 
                     if _final.strip() != _streamed_text.strip():
                         st.info("Response revised after quality review.")
+
                 else:
-                    # Basic / Advanced modes: use st.write_stream
-                    st.write_stream(
-                        stream_rag_query(
-                            query,
-                            top_k=_top_k,
-                            mode=_mode,
-                            case_id=_case_id,
-                            result_holder=result,
-                        )
-                    )
+                    # Basic / Advanced: retrieve → (rank) → generate with stage labels
+                    with _status_area:
+                        with st.status(
+                            "🔍 Searching documents...", expanded=False
+                        ) as _status:
+                            _t0  = time.time()
+                            gen  = stream_rag_query(
+                                query,
+                                top_k=_top_k,
+                                mode=_mode,
+                                case_id=_case_id,
+                                result_holder=result,
+                            )
+
+                            # Block until first token — retrieval (+ rerank) runs here
+                            _first_tok = next(gen, None)
+
+                            # Ensure "searching" stage is visible ≥ 0.3 s
+                            _rl = time.time() - _t0
+                            if _rl < 0.3:
+                                time.sleep(0.3 - _rl)
+
+                            if _mode == "rerank":
+                                _status.update(
+                                    label="📊 Ranking evidence...", state="running"
+                                )
+                                time.sleep(0.3)
+
+                            _status.update(
+                                label="✍️ Generating response...", state="running"
+                            )
+
+                            _full_answer = _first_tok or ""
+                            if _full_answer:
+                                _answer_ph.markdown(_full_answer + "▌")
+
+                            for _tok in gen:
+                                _full_answer += _tok
+                                _answer_ph.markdown(_full_answer + "▌")
+
+                            _status.update(label="✅ Complete", state="complete")
+
+                    _final = result.get("answer", _full_answer)
+                    _answer_ph.markdown(_final)
+
+                # ── Metadata row: time · chunks · mode · case ─────────────────
+                _elapsed_total = time.time() - _query_start
+                _case_display  = next(
+                    (c["display_name"] for c in _all_cases if c["case_id"] == _case_id),
+                    _case_id or "—",
+                )
+                st.markdown(
+                    f'<div style="margin-top:8px;padding:6px 12px;'
+                    f'background:rgba(255,255,255,0.04);border:1px solid #30363D;'
+                    f'border-radius:6px;color:#8B949E;font-size:0.78rem;'
+                    f'font-family:monospace;">'
+                    f'⏱ {_elapsed_total:.1f}s &nbsp;·&nbsp; '
+                    f'📄 {result.get("chunks_used", 0)} chunks &nbsp;·&nbsp; '
+                    f'🔧 {_mode_label_map.get(_mode, _mode)} &nbsp;·&nbsp; '
+                    f'📁 {_case_display}'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
 
                 if result.get("sources"):
                     st.markdown("**Sources:**")

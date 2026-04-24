@@ -23,7 +23,8 @@ from modules.feedback import (
 from modules.ingestion import ingest_document, get_ingested_documents, clear_all_documents
 from modules.redaction import redact_document
 from modules.search import search_case_law, lookup_citation  # ⚠️ Requires internet — disabled for Shenelle's deployment
-from modules.llm import rag_query, summarize_documents, test_connection
+from modules.llm import rag_query, stream_rag_query, summarize_documents, test_connection
+from modules.agentic_rag import stream_agentic_rag_query
 from modules.retrieval import normalize_score
 from modules.cache import clear_cache
 
@@ -834,17 +835,55 @@ with tab1:
             with st.chat_message("user"):
                 st.markdown(query)
 
-            # Get RAG response
+            # Get RAG response — streaming
+            _mode    = st.session_state.get("retrieval_mode", "rerank")
+            _top_k   = st.session_state.get("top_k", 5)
+            _case_id = st.session_state.get("active_case")
+            result   = {}
+
             with st.chat_message("assistant"):
-                with st.spinner("Searching documents and generating response..."):
-                    result = rag_query(
+                if _mode == "agentic":
+                    # Expert mode: show per-stage progress then stream synthesis
+                    _status_ph = st.empty()
+                    _answer_ph = st.empty()
+
+                    def _agentic_progress(msg: str) -> None:
+                        _status_ph.markdown(
+                            f'<p style="color:#02C39A;font-size:0.85rem;'
+                            f'font-style:italic;">{msg}</p>',
+                            unsafe_allow_html=True,
+                        )
+
+                    _streamed_text = ""
+                    for _tok in stream_agentic_rag_query(
                         query,
-                        top_k=st.session_state.get("top_k", 5),
-                        mode=st.session_state.get("retrieval_mode", "rerank"),
-                        case_id=st.session_state.get("active_case"),
+                        top_k=_top_k,
+                        case_id=_case_id,
+                        progress_callback=_agentic_progress,
+                        result_holder=result,
+                    ):
+                        _streamed_text += _tok
+                        _answer_ph.markdown(_streamed_text + "▌")
+
+                    _status_ph.empty()
+                    _final = result.get("answer", _streamed_text)
+                    _answer_ph.markdown(_final)
+
+                    if _final.strip() != _streamed_text.strip():
+                        st.info("Response revised after quality review.")
+                else:
+                    # Basic / Advanced modes: use st.write_stream
+                    st.write_stream(
+                        stream_rag_query(
+                            query,
+                            top_k=_top_k,
+                            mode=_mode,
+                            case_id=_case_id,
+                            result_holder=result,
+                        )
                     )
-                st.markdown(result["answer"])
-                if result["sources"]:
+
+                if result.get("sources"):
                     st.markdown("**Sources:**")
                     for source in result["sources"]:
                         st.markdown(
@@ -852,7 +891,7 @@ with tab1:
                             f'📄 {source["file"]} — Page {source["page"]} '
                             f'(confidence: {normalize_score(source)}/10)'
                             f'</div>',
-                            unsafe_allow_html=True
+                            unsafe_allow_html=True,
                         )
 
             # Auto-failure detection
@@ -860,12 +899,11 @@ with tab1:
                 normalize_score(s)
                 for s in result.get("sources", [])
             ]
-            
+
             _doc_list = [s["file"] for s in result.get("sources", [])]
-            _mode = st.session_state.get("retrieval_mode", "rerank")
             check_and_log_auto_failures(
                 query=query,
-                response=result["answer"],
+                response=result.get("answer", ""),
                 mode=_mode,
                 top_k=st.session_state.get("top_k", 7),
                 chunks_used=result.get("chunks_used", 0),
@@ -877,7 +915,7 @@ with tab1:
             # Store result in session state for feedback UI persistence
             st.session_state["last_result"] = {
                 "query": query,
-                "answer": result["answer"],
+                "answer": result.get("answer", ""),
                 "sources": result.get("sources", []),
                 "chunks_used": result.get("chunks_used", 0),
                 "mode": _mode,
@@ -891,8 +929,8 @@ with tab1:
             # Save to history
             st.session_state.messages.append({
                 "role": "assistant",
-                "content": result["answer"],
-                "sources": result["sources"]
+                "content": result.get("answer", ""),
+                "sources": result.get("sources", []),
             })
 
     # ── Feedback UI — rendered outside chat block, persists on rerun ──────────

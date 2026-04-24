@@ -99,14 +99,8 @@ def get_llm(model: str = PRIMARY_MODEL, temperature: float = 0.0) -> ChatOllama:
     )
 
 
-@traceable(name="query_llm")
-def query_llm(prompt: str, context: str = "", model: str = PRIMARY_MODEL,
-              multihop: bool = False) -> str:
-    """
-    Send a query to the local LLM with optional RAG context.
-    Returns the model's response as a string.
-    """
-    llm = get_llm(model=model)
+def _build_rag_messages(prompt: str, context: str = "", multihop: bool = False) -> list:
+    """Build the LangChain message list for a RAG query (shared by invoke and stream paths)."""
     messages = [SystemMessage(content=SYSTEM_PROMPT)]
     if context:
         if multihop:
@@ -129,7 +123,6 @@ Cite every factual claim with (Source: filename, Page X)."""
             instruction = """Use the following document excerpts to answer the \
 question. Cite the source filename and page number for each piece of information \
 you use. Provide a clear, structured answer with citations."""
-
         messages.append(HumanMessage(content=f"""{instruction}
 
 DOCUMENT CONTEXT:
@@ -139,6 +132,38 @@ QUESTION:
 {prompt}"""))
     else:
         messages.append(HumanMessage(content=prompt))
+    return messages
+
+
+def _build_sources(chunks: List[Dict]) -> List[Dict]:
+    """Deduplicate chunks into the sources list format returned by rag_query."""
+    sources, seen = [], set()
+    for chunk in chunks:
+        key = f"{chunk['source']}|{chunk['page']}"
+        if key not in seen:
+            sources.append({
+                "file": chunk["source"],
+                "page": chunk["page"],
+                "score": chunk.get("rrf_score", chunk.get("score", 0)),
+                "rerank_score": (
+                    chunk.get("rerank_score")
+                    or chunk.get("rrf_score")
+                    or chunk.get("score")
+                ),
+            })
+            seen.add(key)
+    return sources
+
+
+@traceable(name="query_llm")
+def query_llm(prompt: str, context: str = "", model: str = PRIMARY_MODEL,
+              multihop: bool = False) -> str:
+    """
+    Send a query to the local LLM with optional RAG context.
+    Returns the model's response as a string.
+    """
+    llm = get_llm(model=model)
+    messages = _build_rag_messages(prompt, context, multihop)
     response = llm.invoke(messages)
     return response.content
 
@@ -194,6 +219,74 @@ def rag_query(question: str, top_k: int = 5,
     }
     set_cached_query(question, mode, top_k, result)
     return result
+
+def stream_rag_query(
+    question: str,
+    top_k: int = 5,
+    mode: str = "hybrid",
+    case_id=None,
+    result_holder: dict = None,
+):
+    """
+    Generator — yields LLM response tokens as they arrive.
+
+    On a cache hit: yields the cached answer character by character so the UI
+    behavior is consistent with a live generation.
+
+    After the last token is yielded, ``result_holder`` (if provided) is
+    populated with the same dict shape as ``rag_query()`` so the caller can
+    read sources, chunks, etc. without a second round-trip.
+
+    Agentic mode falls back to the non-streaming pipeline; the Streamlit UI
+    should call ``stream_agentic_rag_query`` directly for progress indicators.
+    """
+    from modules.retrieval import retrieve_and_format
+
+    # ── Cache hit — replay char by char ──────────────────────────────────────
+    cached = get_cached_query(question, mode, top_k)
+    if cached is not None:
+        if result_holder is not None:
+            result_holder.update({**cached, "from_cache": True})
+        yield from cached["answer"]
+        return
+
+    # ── Agentic fallback (non-streaming) ─────────────────────────────────────
+    if mode == "agentic":
+        from modules.agentic_rag import agentic_rag_query
+        result = agentic_rag_query(question, top_k=top_k, case_id=case_id)
+        if result_holder is not None:
+            result_holder.update(result)
+        set_cached_query(question, mode, top_k, result)
+        yield from result["answer"]
+        return
+
+    # ── Standard retrieval + streaming synthesis ──────────────────────────────
+    context, chunks = retrieve_and_format(
+        question, top_k=top_k, mode=mode, case_id=case_id
+    )
+
+    llm = get_llm()
+    messages = _build_rag_messages(question, context, multihop=(mode == "multihop"))
+
+    full_answer = ""
+    for chunk in llm.stream(messages):
+        token = chunk.content
+        if token:
+            full_answer += token
+            yield token
+
+    sources = _build_sources(chunks)
+    result = {
+        "question": question,
+        "answer": full_answer,
+        "sources": sources,
+        "chunks": chunks,
+        "chunks_used": len(chunks),
+    }
+    if result_holder is not None:
+        result_holder.update(result)
+    set_cached_query(question, mode, top_k, result)
+
 
 @traceable(name="summarize_documents")
 def summarize_documents(document_names: List[str] = None) -> str:

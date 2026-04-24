@@ -467,6 +467,163 @@ def agentic_rag_query(
     }
 
 
+# ── Streaming public interface ────────────────────────────────────────────────
+def stream_agentic_rag_query(
+    question: str,
+    top_k: int = 7,
+    case_id: Optional[str] = None,
+    progress_callback=None,
+    result_holder: dict = None,
+):
+    """
+    Streaming version of agentic_rag_query for the Streamlit UI.
+
+    Yields tokens from the final synthesis step so the UI can display the
+    response as it is generated rather than waiting ~77 s for the full pipeline.
+
+    Progress phases are reported via ``progress_callback(message: str)`` so the
+    caller can update a status placeholder for each pipeline stage:
+        "🔍 Planning query..."
+        "📚 Retrieving documents (N sub-queries)..."
+        "✍️ Generating response..."
+        "🔄 Revising response..."   (only when self-critique fails)
+
+    After the generator is exhausted, ``result_holder`` is populated with the
+    same dict shape as ``agentic_rag_query()`` so the caller can read sources,
+    sub_queries, critique, etc.
+
+    The LangGraph pipeline (``agentic_rag_query``) is left untouched and
+    continues to be used by the eval runner and CLI.
+    """
+    from modules.llm import _build_sources, SYSTEM_PROMPT
+    from modules.cache import set_cached_query, get_cached_query
+
+    def _progress(msg: str) -> None:
+        if progress_callback:
+            progress_callback(msg)
+
+    # ── Cache hit — replay char by char ──────────────────────────────────────
+    cached = get_cached_query(question, "agentic", top_k)
+    if cached is not None:
+        if result_holder is not None:
+            result_holder.update({**cached, "from_cache": True})
+        yield from cached["answer"]
+        return
+
+    llm = _get_llm()
+
+    # ── Stage 1: Query planning ───────────────────────────────────────────────
+    _progress("🔍 Planning query...")
+    state: AgenticState = {
+        "query":          question,
+        "sub_queries":    [],
+        "all_chunks":     [],
+        "speaker_map":    {},
+        "draft_response": "",
+        "final_response": "",
+        "critique_notes": "",
+        "revision_count": 0,
+        "top_k":          top_k,
+        "case_id":        case_id,
+    }
+    state = query_planner(state)
+
+    # ── Stage 2: Multi-pass retrieval ─────────────────────────────────────────
+    n_sub = len(state["sub_queries"])
+    _progress(f"📚 Retrieving documents ({n_sub} sub-quer{'y' if n_sub == 1 else 'ies'})...")
+    state = multi_pass_retrieve(state)
+
+    # ── Stage 3: Stream attribution synthesis ─────────────────────────────────
+    _progress("✍️ Generating response...")
+    context = format_context(state["all_chunks"])
+
+    speaker_instructions = ""
+    if state["speaker_map"]:
+        lines = [
+            f"  - {sp}: statements must be cited from {', '.join(srcs)}"
+            for sp, srcs in state["speaker_map"].items()
+        ]
+        speaker_instructions = (
+            "\n\nIDENTIFIED SPEAKERS IN RETRIEVED DOCUMENTS — STRICT ATTRIBUTION REQUIRED:\n"
+            + "\n".join(lines)
+            + "\n\nFor each speaker above, cite ONLY their own deposition/document. "
+            "NEVER attribute one speaker's words to another document."
+        )
+
+    agentic_system = SYSTEM_PROMPT + speaker_instructions + """
+
+AGENTIC RAG MODE — ADDITIONAL REQUIREMENTS:
+- This response was generated after multi-pass retrieval across sub-queries
+- You have richer context than standard mode — use it to answer ALL parts of the question
+- If the question has multiple parts (A, B, C), answer each part explicitly
+- Identify and explicitly flag ANY contradictions between documents
+- Do not collapse multi-part answers into a single vague response
+- If a sub-question cannot be answered from the retrieved context, say so explicitly"""
+
+    messages = [
+        SystemMessage(content=agentic_system),
+        HumanMessage(content=(
+            f"CONTEXT FROM DOCUMENTS:\n{context}\n\n"
+            f"QUESTION: {state['query']}\n\n"
+            "Answer completely, with strict per-speaker attribution and explicit "
+            "citations for every factual claim."
+        )),
+    ]
+
+    full_answer = ""
+    for chunk in llm.stream(messages):
+        token = chunk.content
+        if token:
+            full_answer += token
+            yield token
+
+    state["draft_response"] = full_answer
+
+    # ── Stage 4: Self-critique (silent — runs after last yield) ───────────────
+    state = self_critique(state)
+
+    # ── Stage 5: Optional revision ────────────────────────────────────────────
+    if should_revise(state) == "revise":
+        _progress("🔄 Revising response...")
+        context2 = format_context(state["all_chunks"])
+        messages2 = [
+            SystemMessage(content=SYSTEM_PROMPT),
+            HumanMessage(content=(
+                f"CONTEXT FROM DOCUMENTS:\n{context2}\n\n"
+                f"ORIGINAL QUESTION: {state['query']}\n\n"
+                f"PREVIOUS DRAFT (with errors):\n{state['draft_response']}\n\n"
+                f"ERRORS IDENTIFIED:\n{state['critique_notes']}\n\n"
+                "Please rewrite the response correcting ALL identified errors. "
+                "Maintain strict per-speaker attribution and cite every factual claim."
+            )),
+        ]
+        revised = ""
+        for chunk in llm.stream(messages2):
+            token = chunk.content
+            if token:
+                revised += token
+        state["draft_response"] = revised
+        state["revision_count"] = 1
+
+    state["final_response"] = state["draft_response"]
+
+    # ── Populate result_holder and cache ─────────────────────────────────────
+    result = {
+        "question":       question,
+        "answer":         state["final_response"],
+        "sources":        _build_sources(state["all_chunks"]),
+        "chunks":         state["all_chunks"],
+        "chunks_used":    len(state["all_chunks"]),
+        "sub_queries":    state["sub_queries"],
+        "speaker_map":    state["speaker_map"],
+        "critique":       state["critique_notes"],
+        "revision_count": state["revision_count"],
+    }
+    if result_holder is not None:
+        result_holder.update(result)
+    set_cached_query(question, "agentic", top_k, result)
+
+
 # ── CLI Test ──────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import sys

@@ -240,10 +240,13 @@ SYSTEM ANSWER:
 {response}
 {trap_instruction}
 INSTRUCTIONS:
-- Check whether the SUBSTANCE of each key fact is present in the answer. Paraphrasing, synonyms, and equivalent numeric representations all count.
+- Evaluate SUBSTANCE, not exact keyword presence. Paraphrasing, synonyms, and equivalent numeric representations all count.
 - A fact like "124,500" is covered if the answer mentions $124,500 or "approximately $124k" in context.
 - A fact like "declined" is covered if the answer says "rejected", "refused", "did not accept", etc.
 - A fact like "five" is covered if the answer says "5" or "five consecutive".
+- DATE CONTAINMENT: A key fact like "May" is fully covered if the answer contains a full date that includes that month, e.g. "May 15, 2024" satisfies the key fact "May". Do not require the bare month word to appear separately.
+- NO-SETTLEMENT TRAP: The key fact "no settlement" is satisfied if the answer correctly states that the case went to trial (no litigation settlement occurred) AND correctly identifies the $45,000 figure as a severance/separation offer made at termination — not a settlement of a lawsuit. An answer that makes this distinction PASSES the "no settlement" and "45,000" key facts even if it uses different wording.
+- When in doubt, ask: did the answer convey the correct factual substance to a knowledgeable reader? If yes, count the key fact as covered.
 - Return PASS only if ALL key facts are substantively covered AND no trap condition is triggered.
 - Return FAIL if ANY key fact is missing from the substance of the answer.
 

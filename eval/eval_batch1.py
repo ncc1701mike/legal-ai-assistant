@@ -8,11 +8,11 @@ Baseline: 53% pass rate (16/30) from pre-agentic multihop mode.
 import sys
 import time
 import json
-import re
 from datetime import datetime
 
 sys.path.insert(0, "/Users/michaeldoran/AIE9/legal-ai-assistant")
-from modules.llm import rag_query
+from modules.llm import rag_query, get_llm
+from langchain_core.messages import HumanMessage
 
 QUESTIONS = [
     # FACTUAL — Easy
@@ -210,46 +210,66 @@ def get_mode(q: dict) -> str:
     return "rerank"
 
 
-def score_response(response: str, key_facts: list, trap: str) -> tuple:
-    """Fuzzy keyword scoring — checks for partial matches too."""
-    response_lower = response.lower()
-    response_normalized = re.sub(r'[$,]', '', response_lower)
-    response_normalized = re.sub(r'\b(\d+)k\b', lambda m: str(int(m.group(1))*1000), response_normalized)
-    hits = []
-    misses = []
+def score_response(question: str, response: str, key_facts: list, trap: str) -> tuple:
+    """LLM-based evaluator — checks substantive coverage of key facts, not exact keywords."""
+    facts_formatted = "\n".join(f"  - {f}" for f in key_facts)
 
-    for fact in key_facts:
-        fact_lower = fact.lower()
-        fact_normalized = re.sub(r'[$,]', '', fact_lower)
-        # Direct match
-        if fact_normalized in response_normalized:
-            hits.append(fact)
-        # Fuzzy: check if all words in the fact appear nearby
-        else:
-            words = fact_normalized.split()
-            if len(words) > 1 and all(w in response_normalized for w in words):
-                hits.append(fact + " (fuzzy)")
-            else:
-                misses.append(fact)
-
-    score = len(hits) / len(key_facts) if key_facts else 0
-
-    # Trap checks
-    trap_failed = False
+    trap_instruction = ""
     if trap == "confabulate_settlement":
-        dollar_amounts = re.findall(r'\$[\d,]+', response)
-        bad_amounts = [a for a in dollar_amounts
-                      if "45,000" not in a and "45000" not in a
-                      and int(re.sub(r'[,$]', '', a)) > 50000]
-        if bad_amounts:
-            trap_failed = True
+        trap_instruction = (
+            "\nTRAP CHECK: This case has no settlement. If the answer states or implies a "
+            "specific settlement amount (other than the $45,000 severance offer at termination), "
+            "return FAIL regardless of other facts covered."
+        )
     elif trap == "confabulate_trial_outcome":
-        bad_phrases = ["was successful", "won the", "prevailed", "verdict for chen"]
-        if any(p in response_lower for p in bad_phrases):
-            trap_failed = True
+        trap_instruction = (
+            "\nTRAP CHECK: Chen's Title VII racial discrimination claim was dismissed at "
+            "summary judgment — it was not successful at trial. If the answer states or implies "
+            "the Title VII claim succeeded at trial, return FAIL regardless of other facts covered."
+        )
 
-    passed = score >= 0.6 and not trap_failed
-    return passed, score, hits, misses
+    eval_prompt = f"""You are a strict legal eval judge. Determine whether the system answer substantively covers each required key fact.
+
+QUESTION:
+{question}
+
+REQUIRED KEY FACTS (substance, not exact wording):
+{facts_formatted}
+
+SYSTEM ANSWER:
+{response}
+{trap_instruction}
+INSTRUCTIONS:
+- Check whether the SUBSTANCE of each key fact is present in the answer. Paraphrasing, synonyms, and equivalent numeric representations all count.
+- A fact like "124,500" is covered if the answer mentions $124,500 or "approximately $124k" in context.
+- A fact like "declined" is covered if the answer says "rejected", "refused", "did not accept", etc.
+- A fact like "five" is covered if the answer says "5" or "five consecutive".
+- Return PASS only if ALL key facts are substantively covered AND no trap condition is triggered.
+- Return FAIL if ANY key fact is missing from the substance of the answer.
+
+Respond in EXACTLY this format (two lines only):
+VERDICT: PASS
+REASON: one sentence"""
+
+    try:
+        llm = get_llm()
+        msg = llm.invoke([HumanMessage(content=eval_prompt)])
+        verdict_text = msg.content.strip()
+
+        passed = "VERDICT: PASS" in verdict_text
+        reason_line = next(
+            (ln for ln in verdict_text.splitlines() if ln.startswith("REASON:")),
+            "REASON: no reason provided"
+        )
+        reason = reason_line.replace("REASON:", "").strip()
+
+        score = 1.0 if passed else 0.0
+        hits = ["LLM: all key facts covered"] if passed else []
+        misses = [] if passed else [reason]
+        return passed, score, hits, misses
+
+    except Exception as e:
+        return False, 0.0, [], [f"evaluator error: {e}"]
 
 
 def run_eval():
@@ -275,7 +295,7 @@ def run_eval():
             elapsed = time.time() - start
             total_time += elapsed
 
-            ok, score, hits, misses = score_response(answer, q["key_facts"], q["trap"])
+            ok, score, hits, misses = score_response(q["question"], answer, q["key_facts"], q["trap"])
 
             status = "✅ PASS" if ok else "❌ FAIL"
             print(f"  {status} | Score: {score:.0%} | Time: {elapsed:.1f}s")

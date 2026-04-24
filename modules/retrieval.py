@@ -293,32 +293,45 @@ def hybrid_retrieve(query: str, top_k: int = 5,
 
 # ── Strategy 5: Hybrid + Cross-Encoder Reranker ───────────────────────────
 @traceable(name="rerank_retrieve")
-def rerank_retrieve(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+def rerank_retrieve(query: str, top_k: int = 10) -> List[Dict[str, Any]]:
     """
     Three-stage retrieval pipeline:
-    1. Hybrid RRF fetches top 20 candidates (broad recall)
-    2. Cross-encoder reranker scores all 20 against the actual query
-    3. Return top_k reranked results (precision)
-    
-    The cross-encoder reads query+chunk together using full cross-attention,
-    producing a much more accurate relevance score than cosine similarity.
+    1. Fetch candidates from both semantic (HyDE) and keyword (BM25) search
+    2. Cross-encoder reranker scores all candidates against the actual query
+    3. Return top_k reranked results
+
+    Pulling from both sources ensures specific fact phrases (BM25) and
+    conceptual matches (HyDE) both reach the cross-encoder.
     Model: cross-encoder/ms-marco-MiniLM-L-6-v2 (runs locally, ~80MB)
     """
-    from sentence_transformers import CrossEncoder
+    fetch_k = max(top_k * 3, 20)
 
-    # Stage 1: Get broad candidate pool from hybrid
-    candidates = hybrid_retrieve(query, top_k=30, use_hyde=True)
+    # Stage 1a: semantic candidates via HyDE (falls back to vector on error)
+    try:
+        semantic = hyde_retrieve(query, top_k=fetch_k)
+    except Exception:
+        semantic = retrieve(query, top_k=fetch_k)
+
+    # Stage 1b: keyword candidates via BM25
+    keyword = bm25_retrieve(query, top_k=fetch_k)
+
+    # Merge and deduplicate — preserve order (semantic first for tiebreaking)
+    seen = set()
+    candidates = []
+    for chunk in semantic + keyword:
+        key = f"{chunk['source']}|{chunk['page']}|{chunk['text'][:50]}"
+        if key not in seen:
+            seen.add(key)
+            candidates.append(chunk)
 
     if not candidates:
         return retrieve(query, top_k=top_k)
 
     # Stage 2: Rerank with cross-encoder
     cross_encoder = _get_cross_encoder()
-
     pairs = [(query, chunk["text"]) for chunk in candidates]
     scores = cross_encoder.predict(pairs)
 
-    # Attach rerank scores
     for chunk, score in zip(candidates, scores):
         chunk["rerank_score"] = round(float(score), 6)
         chunk["method"] = "hybrid_rerank"

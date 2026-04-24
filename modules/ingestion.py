@@ -20,8 +20,8 @@ from sentence_transformers import SentenceTransformer
 # ── Configuration ─────────────────────────────────────────────────────────────
 CHROMA_PATH = "./db/chroma"
 COLLECTION_NAME = "legal_docs"
-CHUNK_SIZE = 800
-CHUNK_OVERLAP = 300
+CHUNK_SIZE = 450
+CHUNK_OVERLAP = 100
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"  # fast, local, no external calls
 
 # ── Document Type Detection ────────────────────────────────────────────────────
@@ -329,7 +329,7 @@ def chunk_pages(pages: List[Dict], source: str) -> List[Dict[str, Any]]:
         chunk_overlap = 150   # Overlap carries speaker context forward
         separators = deposition_separators
     elif doc_type == "email_chain":
-        chunk_size = 600      # Medium — preserve individual email context
+        chunk_size = 500      # Preserve individual email context without burying facts
         chunk_overlap = 100
         separators = email_separators
     else:

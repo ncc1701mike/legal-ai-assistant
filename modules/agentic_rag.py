@@ -125,7 +125,10 @@ def _build_speaker_map(chunks: List[Dict[str, Any]]) -> Dict[str, List[str]]:
 def query_planner(state: AgenticState) -> AgenticState:
     """
     Decomposes the user query into 2-4 targeted sub-queries.
-    Simple queries get 1-2 sub-queries. Complex multi-part queries get 3-4.
+    Performance questions always generate exactly 3 sub-queries targeting:
+    IT/badge logs, historical reviews, and witness testimony — ensuring all
+    three independent evidence categories are retrieved rather than just the
+    chunks most semantically similar to the top-level question.
     """
     logger.info(f"[AgenticRAG] Node 1: Planning sub-queries for: {state['query'][:80]}")
 
@@ -140,7 +143,18 @@ def query_planner(state: AgenticState) -> AgenticState:
             "- Sub-queries should be 5-15 words, specific and searchable\n"
             "- If the question is simple and single-topic, output just 1-2 sub-queries\n"
             "- Output ONLY a numbered list of sub-queries, no preamble or explanation\n"
-            "- Focus on: specific people, specific events, specific dates, specific documents"
+            "- Focus on: specific people, specific events, specific dates, specific documents\n\n"
+            "PERFORMANCE QUESTIONS — MANDATORY FAN-OUT:\n"
+            "If the question involves performance decline, work quality, productivity, "
+            "missed deadlines, or whether an employee's performance changed, you MUST "
+            "generate exactly 3 sub-queries, one per evidence category, in this order:\n"
+            "  1. IT system logs, badge access records, login timestamps, hours worked\n"
+            "  2. Historical performance reviews, prior evaluations, supervisor ratings\n"
+            "  3. Witness testimony about work quality and conduct from colleagues or observers\n"
+            "Do NOT generate a single broad sub-query for the whole performance question. "
+            "Fan out across all three evidence categories even if the original question "
+            "does not name them — the goal is to retrieve from three distinct document types "
+            "that each provide independent evidence about whether performance actually changed."
         )),
         HumanMessage(content=(
             f"Decompose this legal question into targeted sub-queries:\n\n{state['query']}"

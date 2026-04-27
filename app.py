@@ -2,6 +2,7 @@
 # AI Legal Assistant — Main Streamlit Application
 # Production build — fully local, no external calls
 
+import json
 import os
 import time
 import logging
@@ -32,6 +33,10 @@ from modules.agentic_rag import stream_agentic_rag_query
 from modules.hardware_detect import (
     get_system_ram_gb, get_recommended_models,
     get_available_ollama_models, get_pull_command,
+    get_user_friendly_configs, get_current_profile, get_auto_recommended_profile,
+)
+from modules.update_checker import (
+    check_for_model_updates, set_last_update_check, get_last_update_check,
 )
 from modules.retrieval import normalize_score
 from modules.cache import clear_cache
@@ -340,6 +345,10 @@ if "show_new_case_form" not in st.session_state:
     st.session_state.show_new_case_form = False
 if "confirm_delete" not in st.session_state:
     st.session_state.confirm_delete = False
+if "update_check_result" not in st.session_state:
+    st.session_state.update_check_result = None
+if "auto_profile_applied" not in st.session_state:
+    st.session_state.auto_profile_applied = False
 
 # Resolve active case on first load
 if "active_case" not in st.session_state:
@@ -452,55 +461,119 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # ── Model Settings ────────────────────────────────────────────────────────
-    st.markdown("### Model Settings")
+    # ── Analysis Engine ───────────────────────────────────────────────────────
+    st.markdown("### Analysis Engine")
 
-    _ram_gb          = get_system_ram_gb()
-    _installed       = get_available_ollama_models()
-    _recommended     = get_recommended_models(ram_gb=_ram_gb)
-    _current_model   = get_primary_model()
-    _current_name    = next(
-        (m["name"] for m in _recommended if m["id"] == _current_model),
-        _current_model,
-    )
+    _ram_gb       = get_system_ram_gb()
+    _installed    = get_available_ollama_models()
+    _profiles     = get_user_friendly_configs(ram_gb=_ram_gb)
+    _current_model = get_primary_model()
+
+    # Auto-select best available profile on very first launch (no user choice yet)
+    if not st.session_state.auto_profile_applied:
+        st.session_state.auto_profile_applied = True
+        _cfg_path = Path("db") / "user_config.json"
+        try:
+            _has_explicit = _cfg_path.exists() and bool(
+                json.loads(_cfg_path.read_text()).get("primary_model")
+            )
+        except Exception:
+            _has_explicit = False
+        if not _has_explicit:
+            _best = get_auto_recommended_profile(ram_gb=_ram_gb, installed=_installed)
+            set_primary_model(_best["model_id"])
+            _current_model = _best["model_id"]
+
+    _cur_profile  = get_current_profile(_current_model)
+    _cur_name     = _cur_profile["display_name"] if _cur_profile else "Standard"
+
+    # Status indicator — green / yellow / red
+    _cur_installed = _current_model in _installed
+    _cur_ram_ok    = (_cur_profile is None) or (_ram_gb >= _cur_profile["min_ram_gb"])
+    if _cur_installed and _cur_ram_ok:
+        _dot, _status_txt = "#2EA043", "optimal for your hardware"
+    elif _cur_installed:
+        _dot, _status_txt = "#F4A522", "running — RAM may be low"
+    else:
+        _dot, _status_txt = "#CF222E", "engine not installed"
 
     st.markdown(
-        f'<div style="background:rgba(2,195,154,0.10);border-left:3px solid #02C39A;'
-        f'padding:6px 10px;border-radius:4px;margin-bottom:8px;font-size:0.82rem;'
-        f'color:#02C39A !important;">'
-        f'Running on: <strong>{_current_name}</strong> &nbsp;|&nbsp; '
-        f'RAM: <strong>{_ram_gb:.0f} GB</strong>'
+        f'<div style="background:rgba(2,195,154,0.08);border-left:3px solid #02C39A;'
+        f'padding:6px 10px;border-radius:4px;margin-bottom:8px;font-size:0.82rem;">'
+        f'<span style="color:{_dot};font-size:1rem;">●</span> '
+        f'<span style="color:#02C39A !important;">'
+        f'Currently running: <strong>{_cur_name}</strong></span>'
+        f'<br><span style="color:#8B949E;font-size:0.75rem;">{_status_txt}</span>'
         f'</div>',
         unsafe_allow_html=True,
     )
 
-    _model_ids = [m["id"] for m in _recommended]
-    _model_labels = {
-        m["id"]: f'{"✅" if m["id"] in _installed else "⬇️"}  {m["name"]}'
-        for m in _recommended
-    }
-    _sel_idx = _model_ids.index(_current_model) if _current_model in _model_ids else 0
+    # Profile selector — no model IDs visible to user
+    _profile_map = {p["profile_id"]: p for p in _profiles}
+    _profile_ids = [p["profile_id"] for p in _profiles]
 
-    _selected_model = st.selectbox(
-        "Select Model",
-        options=_model_ids,
-        format_func=lambda x: _model_labels[x],
+    _cur_pid  = (
+        _cur_profile["profile_id"]
+        if _cur_profile and _cur_profile["profile_id"] in _profile_ids
+        else _profile_ids[0]
+    )
+    _sel_idx  = _profile_ids.index(_cur_pid)
+
+    def _profile_label(pid: str) -> str:
+        p    = _profile_map[pid]
+        mark = "✅" if p["model_id"] in _installed else "⬇️"
+        return f'{mark}  {p["display_name"]} — {p["recommended_for"]}'
+
+    _selected_pid = st.selectbox(
+        "Select your analysis profile",
+        options=_profile_ids,
+        format_func=_profile_label,
         index=_sel_idx,
-        key="model_selector",
-        help=next(
-            (m["description"] for m in _recommended if m["id"] == _model_ids[_sel_idx]),
-            "",
+        key="profile_selector",
+        help=(
+            "Standard works on any laptop. "
+            "Enhanced and Professional offer deeper document analysis "
+            "but require a newer MacBook Pro or Windows PC with more memory."
         ),
     )
 
-    _model_installed = _selected_model in _installed
-    if not _model_installed:
-        st.warning("Model not installed. Run this command first:")
-        st.code(get_pull_command(_selected_model), language="bash")
+    _sel_profile   = _profile_map[_selected_pid]
+    _sel_installed = _sel_profile["model_id"] in _installed
 
-    if st.button("Apply Model", key="apply_model_btn", disabled=not _model_installed):
-        set_primary_model(_selected_model)
+    if _sel_installed:
+        st.caption(_sel_profile["description"])
+    else:
+        st.markdown(
+            f'<div style="background:rgba(244,165,34,0.08);border-left:3px solid #F4A522;'
+            f'padding:6px 10px;border-radius:4px;font-size:0.80rem;color:#E6EDF3;">'
+            f'To enable <strong>{_sel_profile["display_name"]}</strong>, ask your IT '
+            f'administrator to run the setup command below.'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        with st.expander("IT Setup Instructions"):
+            st.code(get_pull_command(_sel_profile["model_id"]), language="bash")
+
+    if st.button("Apply", key="apply_profile_btn", disabled=not _sel_installed):
+        set_primary_model(_sel_profile["model_id"])
         st.rerun()
+
+    # Update checker
+    st.markdown("")
+    if st.button("🔄 Check for Updates", key="check_updates_btn", use_container_width=True):
+        with st.spinner("Checking for updates..."):
+            _update_results = check_for_model_updates()
+        set_last_update_check()
+        st.session_state.update_check_result = _update_results
+
+    _uc_result = st.session_state.get("update_check_result")
+    if _uc_result is not None:
+        if not _uc_result or all(r.check_failed for r in _uc_result):
+            st.caption("⚠️ Unable to check — you may be offline.")
+        elif any(r.update_available for r in _uc_result):
+            st.warning("Update available for your Analysis Engine — contact IT to update.")
+        else:
+            st.caption("Your analysis engine is up to date ✅")
 
     st.markdown("---")
 

@@ -186,3 +186,137 @@ class TestGetPullCommand:
     def test_mistral_model(self):
         from modules.hardware_detect import get_pull_command
         assert get_pull_command("mistral-nemo:12b") == "ollama pull mistral-nemo:12b"
+
+
+# ── User-friendly hardware profiles ──────────────────────────────────────────
+
+class TestGetUserFriendlyConfigs:
+    def test_8gb_system_returns_standard_only(self):
+        from modules.hardware_detect import get_user_friendly_configs
+        profiles = get_user_friendly_configs(ram_gb=8.0)
+        ids = [p["profile_id"] for p in profiles]
+        assert "standard" in ids
+        assert "enterprise" not in ids
+
+    def test_16gb_system_includes_enhanced_and_professional(self):
+        from modules.hardware_detect import get_user_friendly_configs
+        profiles = get_user_friendly_configs(ram_gb=16.0)
+        ids = [p["profile_id"] for p in profiles]
+        assert "standard" in ids
+        assert "enhanced" in ids
+        assert "professional" in ids
+        assert "enterprise" not in ids
+
+    def test_32gb_system_includes_all_profiles(self):
+        from modules.hardware_detect import get_user_friendly_configs
+        profiles = get_user_friendly_configs(ram_gb=32.0)
+        ids = [p["profile_id"] for p in profiles]
+        assert set(ids) == {"standard", "enhanced", "professional", "enterprise"}
+
+    def test_7gb_system_still_returns_standard(self):
+        from modules.hardware_detect import get_user_friendly_configs
+        profiles = get_user_friendly_configs(ram_gb=7.0)
+        assert len(profiles) == 0  # 7GB doesn't meet 8GB minimum
+
+    def test_each_profile_has_required_keys(self):
+        from modules.hardware_detect import get_user_friendly_configs
+        for p in get_user_friendly_configs(ram_gb=64.0):
+            for key in ("profile_id", "display_name", "description", "model_id", "min_ram_gb"):
+                assert key in p
+
+    def test_no_ram_arg_calls_live_detection(self):
+        from modules.hardware_detect import get_user_friendly_configs
+        mock_mem = MagicMock()
+        mock_mem.total = 16 * (1024 ** 3)
+        with patch("modules.hardware_detect.psutil.virtual_memory", return_value=mock_mem):
+            profiles = get_user_friendly_configs()
+        ids = [p["profile_id"] for p in profiles]
+        assert "standard" in ids
+        assert "enhanced" in ids
+
+
+# ── Current profile matching ──────────────────────────────────────────────────
+
+class TestGetCurrentProfile:
+    def test_known_model_id_returns_matching_profile(self):
+        from modules.hardware_detect import get_current_profile
+        profile = get_current_profile(model_id="llama3.1:8b")
+        assert profile is not None
+        assert profile["profile_id"] == "standard"
+
+    def test_enhanced_profile_matched(self):
+        from modules.hardware_detect import get_current_profile
+        profile = get_current_profile(model_id="llama3.3:8b")
+        assert profile is not None
+        assert profile["profile_id"] == "enhanced"
+
+    def test_unknown_model_returns_none(self):
+        from modules.hardware_detect import get_current_profile
+        assert get_current_profile(model_id="unknown-model:99b") is None
+
+    def test_no_model_arg_reads_from_llm_config(self):
+        from modules.hardware_detect import get_current_profile
+        # get_primary_model is a lazy import inside the function body; patch at source
+        with patch("modules.llm.get_primary_model", return_value="llama3.1:70b"):
+            profile = get_current_profile()
+        assert profile is not None
+        assert profile["profile_id"] == "enterprise"
+
+    def test_all_profile_model_ids_are_recognized(self):
+        from modules.hardware_detect import get_current_profile, _PROFILES
+        for p in _PROFILES:
+            result = get_current_profile(model_id=p["model_id"])
+            assert result is not None
+            assert result["profile_id"] == p["profile_id"]
+
+
+# ── Auto-recommended profile selection ───────────────────────────────────────
+
+class TestGetAutoRecommendedProfile:
+    def _patch(self, ram_gb, installed):
+        return (
+            patch("modules.hardware_detect.psutil.virtual_memory",
+                  return_value=MagicMock(total=int(ram_gb * 1024 ** 3))),
+            patch("modules.hardware_detect.get_available_ollama_models",
+                  return_value=installed),
+        )
+
+    def test_picks_best_installed_model_for_ram(self):
+        from modules.hardware_detect import get_auto_recommended_profile
+        profile = get_auto_recommended_profile(
+            ram_gb=16.0,
+            installed=["llama3.1:8b", "llama3.3:8b"],
+        )
+        assert profile["profile_id"] == "enhanced"
+
+    def test_falls_back_to_standard_when_nothing_installed(self):
+        from modules.hardware_detect import get_auto_recommended_profile
+        profile = get_auto_recommended_profile(ram_gb=64.0, installed=[])
+        assert profile["profile_id"] == "standard"
+
+    def test_enterprise_selected_on_high_ram_with_70b(self):
+        from modules.hardware_detect import get_auto_recommended_profile
+        profile = get_auto_recommended_profile(
+            ram_gb=64.0,
+            installed=["llama3.1:8b", "llama3.1:70b"],
+        )
+        assert profile["profile_id"] == "enterprise"
+
+    def test_ram_constraint_respected(self):
+        from modules.hardware_detect import get_auto_recommended_profile
+        # 8GB system with 70b installed — still can't run it
+        profile = get_auto_recommended_profile(
+            ram_gb=8.0,
+            installed=["llama3.1:8b", "llama3.1:70b"],
+        )
+        assert profile["profile_id"] == "standard"
+
+    def test_no_args_calls_live_detection(self):
+        from modules.hardware_detect import get_auto_recommended_profile
+        mock_mem = MagicMock()
+        mock_mem.total = 16 * (1024 ** 3)
+        with patch("modules.hardware_detect.psutil.virtual_memory", return_value=mock_mem):
+            with patch("modules.hardware_detect.get_available_ollama_models",
+                       return_value=["llama3.1:8b"]):
+                profile = get_auto_recommended_profile()
+        assert profile["profile_id"] == "standard"

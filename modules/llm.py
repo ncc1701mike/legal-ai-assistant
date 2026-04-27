@@ -1,17 +1,43 @@
 # modules/llm.py
 # Local LLM interface via Ollama + RAG query engine
 
+import json
+from pathlib import Path
 from langchain_ollama import ChatOllama
 from langchain_core.messages import HumanMessage, SystemMessage
 from langsmith import traceable
 from typing import List, Dict, Any
 from modules.cache import get_cached_query, set_cached_query
+from modules.citation_verifier import verify_citations
 
 
 
 # ── Model Configuration ───────────────────────────────────────────────────────
-PRIMARY_MODEL = "llama3.1:8b"
-FALLBACK_MODEL = "phi4:14b"
+_FALLBACK_MODEL   = "llama3.1:8b"
+FALLBACK_MODEL    = "phi4:14b"
+_USER_CONFIG_PATH = Path("db/user_config.json")
+
+
+def get_primary_model() -> str:
+    """Returns the user-selected model ID, falling back to llama3.1:8b."""
+    try:
+        if _USER_CONFIG_PATH.exists():
+            cfg = json.loads(_USER_CONFIG_PATH.read_text())
+            return cfg.get("primary_model") or _FALLBACK_MODEL
+    except Exception:
+        pass
+    return _FALLBACK_MODEL
+
+
+def set_primary_model(model_id: str) -> None:
+    """Persists the selected model ID to db/user_config.json."""
+    _USER_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        cfg = json.loads(_USER_CONFIG_PATH.read_text()) if _USER_CONFIG_PATH.exists() else {}
+    except Exception:
+        cfg = {}
+    cfg["primary_model"] = model_id
+    _USER_CONFIG_PATH.write_text(json.dumps(cfg, indent=2))
 
 SYSTEM_PROMPT = """You are an exceptionally precise legal document analyst helping a litigation \
 attorney during the discovery phase of a case. You analyze documents with the rigor of a \
@@ -90,10 +116,10 @@ CRITICAL RULES FOR USING DOCUMENT CONTEXT:
    For synthesized cross-document findings, cite all contributing sources."""
    
 # ── Core LLM Interface ────────────────────────────────────────────────────────
-def get_llm(model: str = PRIMARY_MODEL, temperature: float = 0.0) -> ChatOllama:
+def get_llm(model: str = None, temperature: float = 0.0) -> ChatOllama:
     """Returns a ChatOllama instance connected to the local Ollama server."""
     return ChatOllama(
-        model=model,
+        model=model or get_primary_model(),
         temperature=temperature,
         base_url="http://localhost:11434"
     )
@@ -156,13 +182,13 @@ def _build_sources(chunks: List[Dict]) -> List[Dict]:
 
 
 @traceable(name="query_llm")
-def query_llm(prompt: str, context: str = "", model: str = PRIMARY_MODEL,
+def query_llm(prompt: str, context: str = "", model: str = None,
               multihop: bool = False) -> str:
     """
     Send a query to the local LLM with optional RAG context.
     Returns the model's response as a string.
     """
-    llm = get_llm(model=model)
+    llm = get_llm(model=model or get_primary_model())
     messages = _build_rag_messages(prompt, context, multihop)
     response = llm.invoke(messages)
     return response.content
@@ -210,12 +236,20 @@ def rag_query(question: str, top_k: int = 5,
                 "rerank_score": chunk.get("rerank_score") or chunk.get("rrf_score") or chunk.get("score")
             })
             seen.add(key)
+    citation_report = verify_citations(answer, chunks)
+    if citation_report.unverified_citations:
+        answer += (
+            "\n\n\u26a0\ufe0f **Citation Warning:** One or more citations in this response "
+            "could not be verified against the retrieved documents. Please review manually."
+        )
+
     result = {
         "question": question,
         "answer": answer,
         "sources": sources,
         "chunks": chunks,
-        "chunks_used": len(chunks)
+        "chunks_used": len(chunks),
+        "citation_report": citation_report,
     }
     set_cached_query(question, mode, top_k, result)
     return result
@@ -276,12 +310,14 @@ def stream_rag_query(
             yield token
 
     sources = _build_sources(chunks)
+    citation_report = verify_citations(full_answer, chunks)
     result = {
         "question": question,
         "answer": full_answer,
         "sources": sources,
         "chunks": chunks,
         "chunks_used": len(chunks),
+        "citation_report": citation_report,
     }
     if result_holder is not None:
         result_holder.update(result)
@@ -314,7 +350,7 @@ executive summary that covers:
 
 {context}"""
 
-    return query_llm(prompt, model=PRIMARY_MODEL)
+    return query_llm(prompt)
 
 
 def test_connection() -> bool:

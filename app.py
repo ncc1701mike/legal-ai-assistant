@@ -24,8 +24,15 @@ from modules.feedback import (
 from modules.ingestion import ingest_document, get_ingested_documents, clear_all_documents
 from modules.redaction import redact_document
 from modules.search import search_case_law, lookup_citation  # ⚠️ Requires internet — disabled for Shenelle's deployment
-from modules.llm import rag_query, stream_rag_query, summarize_documents, test_connection
+from modules.llm import (
+    rag_query, stream_rag_query, summarize_documents, test_connection,
+    get_primary_model, set_primary_model,
+)
 from modules.agentic_rag import stream_agentic_rag_query
+from modules.hardware_detect import (
+    get_system_ram_gb, get_recommended_models,
+    get_available_ollama_models, get_pull_command,
+)
 from modules.retrieval import normalize_score
 from modules.cache import clear_cache
 
@@ -442,6 +449,58 @@ with st.sidebar:
             if st.button("Cancel", key="confirm_del_no"):
                 st.session_state.confirm_delete = False
                 st.rerun()
+
+    st.markdown("---")
+
+    # ── Model Settings ────────────────────────────────────────────────────────
+    st.markdown("### Model Settings")
+
+    _ram_gb          = get_system_ram_gb()
+    _installed       = get_available_ollama_models()
+    _recommended     = get_recommended_models(ram_gb=_ram_gb)
+    _current_model   = get_primary_model()
+    _current_name    = next(
+        (m["name"] for m in _recommended if m["id"] == _current_model),
+        _current_model,
+    )
+
+    st.markdown(
+        f'<div style="background:rgba(2,195,154,0.10);border-left:3px solid #02C39A;'
+        f'padding:6px 10px;border-radius:4px;margin-bottom:8px;font-size:0.82rem;'
+        f'color:#02C39A !important;">'
+        f'Running on: <strong>{_current_name}</strong> &nbsp;|&nbsp; '
+        f'RAM: <strong>{_ram_gb:.0f} GB</strong>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    _model_ids = [m["id"] for m in _recommended]
+    _model_labels = {
+        m["id"]: f'{"✅" if m["id"] in _installed else "⬇️"}  {m["name"]}'
+        for m in _recommended
+    }
+    _sel_idx = _model_ids.index(_current_model) if _current_model in _model_ids else 0
+
+    _selected_model = st.selectbox(
+        "Select Model",
+        options=_model_ids,
+        format_func=lambda x: _model_labels[x],
+        index=_sel_idx,
+        key="model_selector",
+        help=next(
+            (m["description"] for m in _recommended if m["id"] == _model_ids[_sel_idx]),
+            "",
+        ),
+    )
+
+    _model_installed = _selected_model in _installed
+    if not _model_installed:
+        st.warning("Model not installed. Run this command first:")
+        st.code(get_pull_command(_selected_model), language="bash")
+
+    if st.button("Apply Model", key="apply_model_btn", disabled=not _model_installed):
+        set_primary_model(_selected_model)
+        st.rerun()
 
     st.markdown("---")
 
@@ -958,6 +1017,51 @@ with tab1:
                             f'</div>',
                             unsafe_allow_html=True,
                         )
+
+                # Citation verification panel
+                _cr = result.get("citation_report")
+                if _cr is not None:
+                    _score = _cr.overall_confidence_score
+                    if _score >= 0.8:
+                        _badge_color, _badge_label = "#238636", "High"
+                    elif _score >= 0.5:
+                        _badge_color, _badge_label = "#9e6a03", "Medium"
+                    else:
+                        _badge_color, _badge_label = "#da3633", "Low"
+
+                    st.markdown(
+                        f'<div style="margin-top:10px;padding:10px 14px;'
+                        f'background:rgba(255,255,255,0.03);border:1px solid #30363D;'
+                        f'border-radius:6px;font-size:0.82rem;">'
+                        f'<span style="font-weight:600;color:#C9D1D9;">Citation Verification</span>'
+                        f'&nbsp;&nbsp;'
+                        f'<span style="background:{_badge_color};color:#fff;padding:2px 8px;'
+                        f'border-radius:4px;font-size:0.75rem;font-weight:600;">'
+                        f'{_badge_label} confidence ({_score:.0%})</span>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    for cit in _cr.verified_citations:
+                        st.markdown(
+                            f'<div class="citation-box" style="border-left:3px solid #238636;">'
+                            f'✅ {cit["raw"]}</div>',
+                            unsafe_allow_html=True,
+                        )
+
+                    for cit in _cr.unverified_citations:
+                        st.markdown(
+                            f'<div class="citation-box" style="border-left:3px solid #da3633;">'
+                            f'⚠️ {cit["raw"]} — '
+                            f'<em>Citation not found in retrieved documents — verify manually</em>'
+                            f'</div>',
+                            unsafe_allow_html=True,
+                        )
+
+                    if _cr.missing_citations:
+                        with st.expander(f"⚠️ {len(_cr.missing_citations)} unsupported factual claim(s) detected"):
+                            for claim in _cr.missing_citations:
+                                st.markdown(f"- `{claim}`")
 
             # Auto-failure detection
             _conf_scores = [

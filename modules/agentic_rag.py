@@ -22,7 +22,7 @@ from langchain_ollama import ChatOllama
 from langsmith import traceable
 
 from modules.retrieval import rerank_retrieve, format_context
-from modules.llm import PRIMARY_MODEL, SYSTEM_PROMPT
+from modules.llm import get_primary_model, SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ class AgenticState(TypedDict):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def _get_llm() -> ChatOllama:
     return ChatOllama(
-        model=PRIMARY_MODEL,
+        model=get_primary_model(),
         temperature=0.0,
         base_url="http://localhost:11434"
     )

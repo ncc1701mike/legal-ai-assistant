@@ -22,7 +22,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
 
 from modules.retrieval import rerank_retrieve, format_context
-from modules.llm import PRIMARY_MODEL
+from modules.llm import get_primary_model
 from langsmith import traceable
 
 # ── State Definition ──────────────────────────────────────────────────────────
@@ -68,7 +68,7 @@ def extract_gaps(state: MultiHopState) -> MultiHopState:
     initial_context = format_context(state["initial_chunks"])
 
     llm = ChatOllama(
-        model=PRIMARY_MODEL,
+        model=get_primary_model(),
         temperature=0.0,
         base_url="http://localhost:11434"
     )

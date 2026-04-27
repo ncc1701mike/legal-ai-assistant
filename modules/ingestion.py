@@ -5,7 +5,6 @@ import logging
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
 
-import os
 import hashlib
 from pathlib import Path
 from typing import List, Dict, Any
@@ -18,7 +17,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-CHROMA_PATH = "./db/chroma"
+CHROMA_PATH = str(Path("db") / "chroma")
 COLLECTION_NAME = "legal_docs"
 CHUNK_SIZE = 450
 CHUNK_OVERLAP = 100
@@ -84,7 +83,7 @@ def get_document_description(source: str, doc_type: str) -> str:
     return descriptions.get(doc_type, "Legal document.")
 
 # ── Initialize Components ─────────────────────────────────────────────────────
-embedding_model = SentenceTransformer(EMBEDDING_MODEL, cache_folder="./db/embeddings")
+embedding_model = SentenceTransformer(EMBEDDING_MODEL, cache_folder=str(Path("db") / "embeddings"))
 chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
 
 

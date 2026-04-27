@@ -1,6 +1,7 @@
 # modules/hardware_detect.py
 # Hardware detection and Ollama model recommendation utilities
 
+import platform
 import psutil
 import requests
 from typing import Dict, List, Optional
@@ -37,6 +38,16 @@ _MODELS_32GB: List[Dict] = _MODELS_16GB + [
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
+def get_platform() -> str:
+    """Returns the current OS as 'mac', 'windows', or 'linux'."""
+    system = platform.system()
+    if system == "Darwin":
+        return "mac"
+    if system == "Windows":
+        return "windows"
+    return "linux"
+
 
 def get_system_ram_gb() -> float:
     """Returns total system RAM in GB."""

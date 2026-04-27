@@ -10,16 +10,16 @@ from typing import Dict, List, Optional
 
 import chromadb
 
-CHROMA_PATH = "./db/chroma"
-CASES_DB_PATH = "./db/cases.json"
-ACTIVE_CASE_PATH = "./db/active_case.json"
+CHROMA_PATH      = Path("db") / "chroma"
+CASES_DB_PATH    = Path("db") / "cases.json"
+ACTIVE_CASE_PATH = Path("db") / "active_case.json"
 _LEGACY_COLLECTION = "legal_docs"   # collection name used before multi-case
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
 def _get_chroma_client() -> chromadb.PersistentClient:
-    return chromadb.PersistentClient(path=CHROMA_PATH)
+    return chromadb.PersistentClient(path=str(CHROMA_PATH))
 
 
 def _load_cases() -> Dict:

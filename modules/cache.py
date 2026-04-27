@@ -5,11 +5,12 @@
 import hashlib
 import json
 import logging
+from pathlib import Path
 import diskcache
 
 logger = logging.getLogger(__name__)
 
-CACHE_DIR = "./db/cache"
+CACHE_DIR = str(Path("db") / "cache")
 CACHE_TTL = 60 * 60 * 24 * 7  # 7 days
 
 _cache = diskcache.Cache(CACHE_DIR)

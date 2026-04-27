@@ -7,6 +7,7 @@ import logging
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
 
+from pathlib import Path
 from typing import List, Dict, Any, Tuple
 from sentence_transformers import SentenceTransformer
 import chromadb
@@ -16,7 +17,7 @@ from modules.ingestion import get_collection as _ingestion_get_collection
 from langsmith import traceable
 
 # ── Initialize Components ─────────────────────────────────────────────────────
-embedding_model = SentenceTransformer(EMBEDDING_MODEL, cache_folder="./db/embeddings")
+embedding_model = SentenceTransformer(EMBEDDING_MODEL, cache_folder=str(Path("db") / "embeddings"))
 
 # At module level, after embedding_model initialization
 _cross_encoder = None

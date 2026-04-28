@@ -9,41 +9,41 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 
-# ── is_first_run ──────────────────────────────────────────────────────────────
+# ── is_configured ─────────────────────────────────────────────────────────────
 
-class TestIsFirstRun:
-    def test_true_when_config_missing(self, tmp_path):
-        from modules.setup_wizard import is_first_run
+class TestIsConfigured:
+    def test_false_when_config_missing(self, tmp_path):
+        from modules.setup_wizard import is_configured
         with patch("modules.setup_wizard._USER_CONFIG_PATH", tmp_path / "user_config.json"):
-            assert is_first_run() is True
+            assert is_configured() is False
 
-    def test_true_when_config_has_no_model(self, tmp_path):
+    def test_false_when_config_has_no_model(self, tmp_path):
         p = tmp_path / "user_config.json"
         p.write_text(json.dumps({"last_update_check": "2024-01-01"}))
         with patch("modules.setup_wizard._USER_CONFIG_PATH", p):
-            from modules.setup_wizard import is_first_run
-            assert is_first_run() is True
+            from modules.setup_wizard import is_configured
+            assert is_configured() is False
 
-    def test_true_when_model_key_is_empty_string(self, tmp_path):
+    def test_false_when_model_key_is_empty_string(self, tmp_path):
         p = tmp_path / "user_config.json"
         p.write_text(json.dumps({"primary_model": ""}))
         with patch("modules.setup_wizard._USER_CONFIG_PATH", p):
-            from modules.setup_wizard import is_first_run
-            assert is_first_run() is True
+            from modules.setup_wizard import is_configured
+            assert is_configured() is False
 
-    def test_false_when_model_is_configured(self, tmp_path):
+    def test_true_when_model_is_configured(self, tmp_path):
         p = tmp_path / "user_config.json"
         p.write_text(json.dumps({"primary_model": "llama3.1:8b"}))
         with patch("modules.setup_wizard._USER_CONFIG_PATH", p):
-            from modules.setup_wizard import is_first_run
-            assert is_first_run() is False
+            from modules.setup_wizard import is_configured
+            assert is_configured() is True
 
-    def test_true_on_corrupt_json(self, tmp_path):
+    def test_false_on_corrupt_json(self, tmp_path):
         p = tmp_path / "user_config.json"
         p.write_text("not valid json{{")
         with patch("modules.setup_wizard._USER_CONFIG_PATH", p):
-            from modules.setup_wizard import is_first_run
-            assert is_first_run() is True
+            from modules.setup_wizard import is_configured
+            assert is_configured() is False
 
 
 # ── get_safe_default_model ────────────────────────────────────────────────────
@@ -190,9 +190,9 @@ class TestGetModelFileSizeGb:
         assert size > 0
 
 
-# ── run_setup_check ───────────────────────────────────────────────────────────
+# ── run_health_check ──────────────────────────────────────────────────────────
 
-class TestRunSetupCheck:
+class TestRunHealthCheck:
     def _mock_env(self, ram_gb=16.0, os_name="Darwin", ollama_ok=True, model_present=True):
         mock_mem = MagicMock()
         mock_mem.total = int(ram_gb * 1024 ** 3)
@@ -217,71 +217,85 @@ class TestRunSetupCheck:
         )
 
     def test_ready_to_use_when_all_ok(self):
-        from modules.setup_wizard import run_setup_check
+        from modules.setup_wizard import run_health_check
         p1, p2, p3 = self._mock_env(ollama_ok=True, model_present=True)
         with p1, p2, p3:
-            status = run_setup_check()
+            status = run_health_check()
         assert status.ready_to_use is True
         assert status.ollama_running is True
         assert status.model_installed is True
 
     def test_not_ready_when_ollama_down(self):
-        from modules.setup_wizard import run_setup_check
+        from modules.setup_wizard import run_health_check
         p1, p2, p3 = self._mock_env(ollama_ok=False)
         with p1, p2, p3:
-            status = run_setup_check()
+            status = run_health_check()
         assert status.ready_to_use is False
         assert status.ollama_running is False
         assert status.model_installed is False
 
     def test_not_ready_when_model_missing(self):
-        from modules.setup_wizard import run_setup_check
+        from modules.setup_wizard import run_health_check
         p1, p2, p3 = self._mock_env(ollama_ok=True, model_present=False)
         with p1, p2, p3:
-            status = run_setup_check()
+            status = run_health_check()
         assert status.ready_to_use is False
         assert status.ollama_running is True
         assert status.model_installed is False
 
     def test_platform_detected_as_mac(self):
-        from modules.setup_wizard import run_setup_check
+        from modules.setup_wizard import run_health_check
         p1, p2, p3 = self._mock_env(os_name="Darwin")
         with p1, p2, p3:
-            status = run_setup_check()
+            status = run_health_check()
         assert status.platform == "mac"
 
     def test_platform_detected_as_windows(self):
-        from modules.setup_wizard import run_setup_check
+        from modules.setup_wizard import run_health_check
         p1, p2, p3 = self._mock_env(os_name="Windows", ollama_ok=False)
         with p1, p2, p3:
-            status = run_setup_check()
+            status = run_health_check()
         assert status.platform == "windows"
 
     def test_ram_gb_populated(self):
-        from modules.setup_wizard import run_setup_check
+        from modules.setup_wizard import run_health_check
         p1, p2, p3 = self._mock_env(ram_gb=16.0)
         with p1, p2, p3:
-            status = run_setup_check()
+            status = run_health_check()
         assert abs(status.ram_gb - 16.0) < 0.1
 
     def test_recommended_model_populated(self):
-        from modules.setup_wizard import run_setup_check
+        from modules.setup_wizard import run_health_check
         p1, p2, p3 = self._mock_env()
         with p1, p2, p3:
-            status = run_setup_check()
+            status = run_health_check()
         assert status.recommended_model in ("llama3.1:8b", "llama3.3:8b")
 
     def test_estimated_download_gb_positive(self):
-        from modules.setup_wizard import run_setup_check
+        from modules.setup_wizard import run_health_check
         p1, p2, p3 = self._mock_env()
         with p1, p2, p3:
-            status = run_setup_check()
+            status = run_health_check()
         assert status.estimated_download_gb > 0
 
     def test_never_raises_on_all_failures(self):
-        from modules.setup_wizard import run_setup_check
+        from modules.setup_wizard import run_health_check
         with patch("modules.setup_wizard.psutil.virtual_memory", side_effect=RuntimeError()):
             with patch("modules.setup_wizard.requests.get", side_effect=ConnectionError()):
                 with patch("modules.setup_wizard.platform.system", side_effect=OSError()):
-                    status = run_setup_check()
+                    status = run_health_check()
         assert isinstance(status.ready_to_use, bool)
+
+    def test_health_status_dataclass_fields(self):
+        from modules.setup_wizard import run_health_check, HealthStatus
+        p1, p2, p3 = self._mock_env()
+        with p1, p2, p3:
+            status = run_health_check()
+        assert isinstance(status, HealthStatus)
+        assert hasattr(status, "ollama_running")
+        assert hasattr(status, "recommended_model")
+        assert hasattr(status, "model_installed")
+        assert hasattr(status, "ram_gb")
+        assert hasattr(status, "platform")
+        assert hasattr(status, "estimated_download_gb")
+        assert hasattr(status, "ready_to_use")

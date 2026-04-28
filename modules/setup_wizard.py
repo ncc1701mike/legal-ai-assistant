@@ -1,6 +1,6 @@
 # modules/setup_wizard.py
-# First-run detection and setup status for the Amicus setup gate.
-# Called on every app load — all functions are fast and never raise.
+# Health-check utilities for the Amicus sidebar status card and warning banner.
+# All functions are fast (2s max timeout), never raise, and carry no side effects.
 
 import json
 import platform
@@ -25,7 +25,7 @@ _MODEL_SIZES_GB: dict = {
 # ── Status dataclass ──────────────────────────────────────────────────────────
 
 @dataclass
-class SetupStatus:
+class HealthStatus:
     ollama_running:        bool
     recommended_model:     str
     model_installed:       bool
@@ -37,23 +37,22 @@ class SetupStatus:
 
 # ── Public helpers ────────────────────────────────────────────────────────────
 
-def is_first_run() -> bool:
-    """Returns True if db/user_config.json doesn't exist or has no model configured."""
+def is_configured() -> bool:
+    """Returns True if db/user_config.json exists and has a model configured."""
     try:
         if not _USER_CONFIG_PATH.exists():
-            return True
+            return False
         cfg = json.loads(_USER_CONFIG_PATH.read_text())
-        return not bool(cfg.get("primary_model"))
+        return bool(cfg.get("primary_model"))
     except Exception:
-        return True
+        return False
 
 
 def get_safe_default_model() -> str:
     """Returns the single safest model for this hardware.
 
     Decision logic (always errs toward the smaller model):
-      < 12 GB RAM  → llama3.1:8b  (universally safe)
-      12-24 GB RAM → llama3.1:8b  (conservative — leave OS headroom)
+      < 24 GB RAM  → llama3.1:8b  (universally safe, leaves OS headroom)
       24+ GB, Mac  → llama3.3:8b  (tested on Apple Silicon, reliable)
       24+ GB, Win  → llama3.1:8b  (Windows has higher OS overhead)
       24+ GB, Linux→ llama3.1:8b  (server default, conservative)
@@ -99,15 +98,14 @@ def get_model_file_size_gb(model_id: str) -> float:
     return _MODEL_SIZES_GB.get(model_id, 4.7)
 
 
-def run_setup_check() -> SetupStatus:
-    """Returns a complete setup status for this machine. Never raises.
+def run_health_check() -> HealthStatus:
+    """Returns current Ollama and model health for this machine. Never raises.
 
     Called on every app load — total wall time is bounded by _TIMEOUT (2s)
     when Ollama is unreachable, otherwise typically < 100ms.
 
-    Intentionally stateless (no module-level caching). This ensures that
-    immediately after a model pull completes, is_model_installed() returns
-    the current state rather than a stale cached result.
+    Intentionally stateless (no module-level caching) so every call reflects
+    the true current state of the Ollama daemon.
     """
     try:
         ram_gb = psutil.virtual_memory().total / (1024 ** 3)
@@ -125,7 +123,7 @@ def run_setup_check() -> SetupStatus:
     installed   = is_model_installed(recommended) if ollama_ok else False
     size_gb     = get_model_file_size_gb(recommended)
 
-    return SetupStatus(
+    return HealthStatus(
         ollama_running        = ollama_ok,
         recommended_model     = recommended,
         model_installed       = installed,

@@ -4,7 +4,6 @@
 
 import json
 import os
-import subprocess
 import time
 import logging
 import tempfile
@@ -39,7 +38,7 @@ from modules.hardware_detect import (
 from modules.update_checker import (
     check_for_model_updates, set_last_update_check, get_last_update_check,
 )
-from modules.setup_wizard import run_setup_check, SetupStatus
+from modules.setup_wizard import run_health_check, HealthStatus
 from modules.retrieval import normalize_score
 from modules.cache import clear_cache
 
@@ -338,208 +337,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ── Setup Gate ────────────────────────────────────────────────────────────────
-# Runs on every page load. Shows a guided setup experience instead of the main
-# app whenever Ollama is not running or the configured model is not installed.
-# Calls st.stop() to prevent any further rendering when setup is needed.
-
-if "setup_pulling" not in st.session_state:
-    st.session_state.setup_pulling = False
-if "setup_complete" not in st.session_state:
-    st.session_state.setup_complete = False
-if "setup_error" not in st.session_state:
-    st.session_state.setup_error = False
-
-
-def _render_setup_page(status: SetupStatus) -> None:
-    """Full-screen attorney-friendly setup experience."""
-    from modules.hardware_detect import _PROFILES
-
-    _, _col, _ = st.columns([1, 2, 1])
-    with _col:
-        st.markdown("# ⚖️ Amicus AI")
-        st.markdown("**Private legal document intelligence — runs entirely on your computer**")
-        st.markdown("---")
-
-        # ── STATE 1: Ollama not running ───────────────────────────────────────
-        if not status.ollama_running:
-            st.markdown("## One more thing to get started")
-            st.markdown(
-                "Amicus uses a local AI engine called **Ollama** to analyze your documents "
-                "privately on your computer. It looks like Ollama isn't running yet."
-            )
-
-            if status.platform == "mac":
-                st.info(
-                    "**Open the Ollama app** from your Applications folder.  \n"
-                    "After it opens, look for the llama icon 🦙 in your menu bar "
-                    "(top-right corner of your screen). That means it's running."
-                )
-                if st.button("Try to Start Ollama Automatically", type="primary"):
-                    os.system("open -a Ollama")
-                    time.sleep(2)
-                    st.rerun()
-
-            elif status.platform == "windows":
-                st.info(
-                    "**Ollama should be running in your system tray.**  \n"
-                    "Look for the llama icon 🦙 near the clock in the bottom-right corner "
-                    "of your screen. If you don't see it, open Ollama from the Start menu."
-                )
-
-            else:
-                st.info(
-                    "Start Ollama by running `ollama serve` in a terminal, "
-                    "then return here."
-                )
-
-            st.markdown("")
-            if st.button("🔄  I've started Ollama — try again", use_container_width=True):
-                st.rerun()
-
-            with st.expander("Need help installing Ollama?"):
-                st.markdown(
-                    "Download Ollama for free from **[ollama.ai](https://ollama.ai)**. "
-                    "It's a small app that runs AI models privately on your computer. "
-                    "See [install/QUICK_START.md](install/QUICK_START.md) for step-by-step instructions."
-                )
-
-        # ── STATE 2: Model not installed ──────────────────────────────────────
-        else:
-            _profile = next(
-                (p for p in _PROFILES if p["model_id"] == status.recommended_model), None
-            )
-            _friendly = _profile["display_name"] if _profile else "Standard"
-            _movies   = max(1, round(status.estimated_download_gb / 2.5))
-
-            st.markdown("## Setting up your Analysis Engine")
-            st.markdown(
-                f"Amicus will install the **{_friendly}** analysis engine — "
-                f"the best fit for your computer based on your hardware."
-            )
-            st.markdown(
-                f"**One-time download: approximately {status.estimated_download_gb:.1f} GB** "
-                f"— about the size of {_movies} HD {'movie' if _movies == 1 else 'movies'}. "
-                f"After this, Amicus works completely offline."
-            )
-
-            with st.expander("Why do I need this?"):
-                st.markdown(
-                    "Amicus analyzes your legal documents using an AI model that runs "
-                    "**entirely on your computer**. Unlike online AI tools, your case files "
-                    "never leave your machine and are never sent to the internet.\n\n"
-                    "The one-time download installs the AI model locally. After that, "
-                    "Amicus can work without any internet connection at all — your documents "
-                    "stay completely private."
-                )
-
-            st.markdown("")
-
-            # ── Show error state if a previous pull failed verification ───────
-            if st.session_state.get("setup_error"):
-                st.error(
-                    "Setup encountered an issue. Please close and reopen Amicus to try again."
-                )
-                if st.button("Try Again", key="setup_retry_btn"):
-                    st.session_state.setup_error = False
-                    st.rerun()
-
-            elif st.session_state.setup_pulling:
-                # ── Active download in progress ───────────────────────────────
-                st.markdown("**Downloading Analysis Engine — please wait...**")
-                _prog_bar   = st.progress(0.0)
-                _status_txt = st.empty()
-                _status_txt.text("Starting download...")
-
-                _pull_ok = False
-                try:
-                    import requests as _req
-                    _resp = _req.post(
-                        "http://localhost:11434/api/pull",
-                        json={"name": status.recommended_model},
-                        stream=True,
-                        timeout=None,
-                    )
-                    for _raw_line in _resp.iter_lines():
-                        if not _raw_line:
-                            continue
-                        try:
-                            _d    = json.loads(_raw_line.decode() if isinstance(_raw_line, bytes) else _raw_line)
-                            _tot  = _d.get("total", 0)
-                            _done = _d.get("completed", 0)
-                            _msg  = _d.get("status", "")
-                            if _tot > 0:
-                                _pct = min(_done / _tot, 1.0)
-                                _prog_bar.progress(_pct)
-                                _gb_d = _done / (1024 ** 3)
-                                _gb_t = _tot  / (1024 ** 3)
-                                _status_txt.text(f"{_msg} — {_gb_d:.2f} / {_gb_t:.2f} GB")
-                            else:
-                                _status_txt.text(_msg)
-                            if _msg == "success":
-                                _pull_ok = True
-                        except (json.JSONDecodeError, Exception):
-                            pass
-                    _pull_ok = True
-                except Exception as _e:
-                    st.error(
-                        f"Download failed: {_e}. "
-                        "Check your internet connection and try again."
-                    )
-
-                if _pull_ok:
-                    _prog_bar.progress(1.0)
-                    _status_txt.text("Verifying installation...")
-
-                    # Persist model choice immediately
-                    from modules.llm import set_primary_model as _spm
-                    _spm(status.recommended_model)
-
-                    # Verify Ollama has registered the model (race condition guard)
-                    from modules.setup_wizard import is_model_installed as _imi
-                    _verified = False
-                    for _attempt in range(3):
-                        if _imi(status.recommended_model):
-                            _verified = True
-                            break
-                        time.sleep(2)
-
-                    st.session_state.setup_pulling = False
-                    if _verified:
-                        # Mark setup done so the gate bypasses run_setup_check()
-                        st.session_state.setup_complete = True
-                        st.success("✅ Setup complete! Loading Amicus...")
-                        time.sleep(1.5)
-                        st.rerun()
-                    else:
-                        # Model not appearing in Ollama after 3 retries — surface error
-                        st.session_state.setup_error = True
-                        st.rerun()
-                else:
-                    st.session_state.setup_pulling = False
-                    st.rerun()
-
-            else:
-                if st.button(
-                    f"⬇️  Set Up Now  ({status.estimated_download_gb:.1f} GB download)",
-                    type="primary",
-                    use_container_width=True,
-                ):
-                    st.session_state.setup_pulling = True
-                    st.rerun()
-
-                st.caption(
-                    "Your internet connection is needed only for this one-time setup. "
-                    "After that, Amicus works completely offline."
-                )
-
-
-_setup_status = run_setup_check()
-if not _setup_status.ready_to_use and not st.session_state.get("setup_complete", False):
-    _render_setup_page(_setup_status)
-    st.stop()
-
-# ── End Setup Gate ────────────────────────────────────────────────────────────
+# ── Health Check (non-blocking) ───────────────────────────────────────────────
+# Runs on every page load. Result is used by the sidebar status card and the
+# main-area warning banner. Never calls st.stop() — the app always loads.
+_health = run_health_check()
 
 
 # ── Session State ─────────────────────────────────────────────────────────────
@@ -669,51 +470,52 @@ with st.sidebar:
     # ── Analysis Engine ───────────────────────────────────────────────────────
     st.markdown("### Analysis Engine")
 
-    _ram_gb        = get_system_ram_gb()
-    _installed     = get_available_ollama_models()
-    _current_model = get_primary_model()
-    _cur_profile   = get_current_profile(_current_model)
-    _cur_name      = _cur_profile["display_name"] if _cur_profile else "Standard"
-    _cur_installed = _current_model in _installed
-    _cur_ram_ok    = (_cur_profile is None) or (_ram_gb >= _cur_profile["min_ram_gb"])
+    _ae_model     = get_primary_model()
+    _ae_installed = get_available_ollama_models()
+    _ae_profile   = get_current_profile(_ae_model)
+    _ae_name      = _ae_profile["display_name"] if _ae_profile else "Standard"
+    _ae_for       = _ae_profile["recommended_for"] if _ae_profile else "standard hardware"
+    _ae_plat_disp = {"mac": "Mac", "windows": "Windows", "linux": "Linux"}.get(
+        _health.platform, "PC"
+    )
+    _ollama_dot = "#2EA043" if _health.ollama_running else "#CF222E"
+    _ollama_lbl = "Connected" if _health.ollama_running else "Not responding"
 
-    if _cur_installed and _cur_ram_ok:
-        _dot, _status_mark = "#2EA043", "✅"
-    elif _cur_installed:
-        _dot, _status_mark = "#F4A522", "⚠️ RAM may be low"
-    else:
-        _dot, _status_mark = "#CF222E", "⚠️ Not installed"
-
-    # Single-line status — no model IDs, no selectors for standard users
     st.markdown(
-        f'<div style="background:rgba(2,195,154,0.08);border-left:3px solid {_dot};'
-        f'padding:8px 12px;border-radius:4px;margin-bottom:6px;">'
-        f'<span style="color:#E6EDF3;font-size:0.90rem;">'
-        f'<span style="color:{_dot};">●</span>&nbsp; '
-        f'<strong>{_cur_name}</strong>&nbsp; {_status_mark}'
-        f'</span></div>',
+        f'<div style="background:rgba(2,195,154,0.06);border-left:3px solid #02C39A;'
+        f'padding:10px 12px;border-radius:4px;margin-bottom:6px;line-height:1.6;">'
+        f'<div style="font-size:0.92rem;color:#E6EDF3;font-weight:600;">{_ae_name}</div>'
+        f'<div style="font-size:0.77rem;color:#8B949E;">'
+        f'{_ae_name} — optimized for {_ae_for}</div>'
+        f'<div style="font-size:0.77rem;color:#8B949E;margin-top:3px;">'
+        f'{_ae_plat_disp} | {round(_health.ram_gb)} GB RAM</div>'
+        f'<div style="font-size:0.77rem;margin-top:3px;">'
+        f'<span style="color:{_ollama_dot};">●</span>'
+        f'<span style="color:#8B949E;"> Ollama {_ollama_lbl}</span>'
+        f'</div></div>',
         unsafe_allow_html=True,
     )
 
-    # Advanced expander — IT administrators only
-    with st.expander("Advanced (IT Administrators Only)"):
+    # Advanced Settings expander — IT administrators only
+    with st.expander("Advanced Settings (IT Administrators Only)"):
         st.warning(
             "Changing the Analysis Engine requires downloading additional software "
             "(up to 40 GB). Only change this setting with guidance from your IT administrator."
         )
 
-        _profiles    = get_user_friendly_configs(ram_gb=_ram_gb)
+        _ae_ram_gb   = _health.ram_gb
+        _profiles    = get_user_friendly_configs(ram_gb=_ae_ram_gb)
         _profile_map = {p["profile_id"]: p for p in _profiles}
         _profile_ids = [p["profile_id"] for p in _profiles]
         _cur_pid     = (
-            _cur_profile["profile_id"]
-            if _cur_profile and _cur_profile["profile_id"] in _profile_ids
+            _ae_profile["profile_id"]
+            if _ae_profile and _ae_profile["profile_id"] in _profile_ids
             else _profile_ids[0]
         )
 
         def _profile_label(pid: str) -> str:
             p    = _profile_map[pid]
-            mark = "✅" if p["model_id"] in _installed else "⬇️"
+            mark = "✅" if p["model_id"] in _ae_installed else "⬇️"
             return f'{mark}  {p["display_name"]} — {p["recommended_for"]}'
 
         _selected_pid = st.selectbox(
@@ -725,7 +527,7 @@ with st.sidebar:
         )
 
         _sel_profile   = _profile_map[_selected_pid]
-        _sel_installed = _sel_profile["model_id"] in _installed
+        _sel_installed = _sel_profile["model_id"] in _ae_installed
 
         if not _sel_installed:
             st.caption("Install command for IT:")
@@ -1083,6 +885,13 @@ h3 {
 
 st.markdown("# ⚖️ Document Analysis")
 st.markdown("*Fully local · Air-gapped · Attorney-client privilege protected*")
+
+if not _health.ollama_running:
+    st.warning(
+        "⚠️ Analysis engine is not responding. "
+        "Please ensure Ollama is running before submitting queries. "
+        "See `install/QUICK_START.md` for setup instructions."
+    )
 
 # ── Onboarding — shown when no cases exist ────────────────────────────────────
 if not list_cases() or not st.session_state.get("active_case"):

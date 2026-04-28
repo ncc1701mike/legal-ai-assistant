@@ -104,6 +104,10 @@ def run_setup_check() -> SetupStatus:
 
     Called on every app load — total wall time is bounded by _TIMEOUT (2s)
     when Ollama is unreachable, otherwise typically < 100ms.
+
+    Intentionally stateless (no module-level caching). This ensures that
+    immediately after a model pull completes, is_model_installed() returns
+    the current state rather than a stale cached result.
     """
     try:
         ram_gb = psutil.virtual_memory().total / (1024 ** 3)

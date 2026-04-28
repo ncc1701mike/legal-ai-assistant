@@ -345,6 +345,10 @@ st.markdown("""
 
 if "setup_pulling" not in st.session_state:
     st.session_state.setup_pulling = False
+if "setup_complete" not in st.session_state:
+    st.session_state.setup_complete = False
+if "setup_error" not in st.session_state:
+    st.session_state.setup_error = False
 
 
 def _render_setup_page(status: SetupStatus) -> None:
@@ -431,7 +435,16 @@ def _render_setup_page(status: SetupStatus) -> None:
 
             st.markdown("")
 
-            if st.session_state.setup_pulling:
+            # ── Show error state if a previous pull failed verification ───────
+            if st.session_state.get("setup_error"):
+                st.error(
+                    "Setup encountered an issue. Please close and reopen Amicus to try again."
+                )
+                if st.button("Try Again", key="setup_retry_btn"):
+                    st.session_state.setup_error = False
+                    st.rerun()
+
+            elif st.session_state.setup_pulling:
                 # ── Active download in progress ───────────────────────────────
                 st.markdown("**Downloading Analysis Engine — please wait...**")
                 _prog_bar   = st.progress(0.0)
@@ -469,20 +482,39 @@ def _render_setup_page(status: SetupStatus) -> None:
                             pass
                     _pull_ok = True
                 except Exception as _e:
-                    st.error(f"Download failed: {_e}. Check your internet connection and try again.")
+                    st.error(
+                        f"Download failed: {_e}. "
+                        "Check your internet connection and try again."
+                    )
 
                 if _pull_ok:
                     _prog_bar.progress(1.0)
-                    _status_txt.text("Complete!")
+                    _status_txt.text("Verifying installation...")
+
+                    # Persist model choice immediately
                     from modules.llm import set_primary_model as _spm
                     _spm(status.recommended_model)
+
+                    # Verify Ollama has registered the model (race condition guard)
+                    from modules.setup_wizard import is_model_installed as _imi
+                    _verified = False
+                    for _attempt in range(3):
+                        if _imi(status.recommended_model):
+                            _verified = True
+                            break
+                        time.sleep(2)
+
                     st.session_state.setup_pulling = False
-                    st.success(
-                        f"Your {_friendly} Analysis Engine is ready. "
-                        "Amicus is launching now..."
-                    )
-                    time.sleep(1.5)
-                    st.rerun()
+                    if _verified:
+                        # Mark setup done so the gate bypasses run_setup_check()
+                        st.session_state.setup_complete = True
+                        st.success("✅ Setup complete! Loading Amicus...")
+                        time.sleep(1.5)
+                        st.rerun()
+                    else:
+                        # Model not appearing in Ollama after 3 retries — surface error
+                        st.session_state.setup_error = True
+                        st.rerun()
                 else:
                     st.session_state.setup_pulling = False
                     st.rerun()
@@ -503,7 +535,7 @@ def _render_setup_page(status: SetupStatus) -> None:
 
 
 _setup_status = run_setup_check()
-if not _setup_status.ready_to_use:
+if not _setup_status.ready_to_use and not st.session_state.get("setup_complete", False):
     _render_setup_page(_setup_status)
     st.stop()
 

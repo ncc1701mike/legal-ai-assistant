@@ -1,14 +1,15 @@
-# ⚖️ Amicus AI — Local Legal Document Intelligence
+# Amicus AI — Local Legal Document Intelligence
+
+[![CI Eval](https://github.com/ncc1701mike/legal-ai-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/ncc1701mike/legal-ai-assistant/actions/workflows/ci.yml)
 
 **Fully local · Air-gapped · Attorney-client privilege protected**
 
-Amicus AI is a privacy-first legal document analysis tool built for litigation attorneys. It runs entirely on your local machine — no documents, queries, or responses ever leave your computer. Built with Llama 3.1 8B, ChromaDB, and a three-stage retrieval pipeline evaluated against a synthetic legal corpus.
+Amicus AI is a privacy-first legal document analysis tool built for litigation attorneys. It runs entirely on your local machine — no documents, queries, or responses ever leave your computer. Built with Llama 3.1 8B, ChromaDB, and a six-stage agentic retrieval pipeline evaluated against a synthetic legal corpus.
 
-## 📹 Demo Video
-[Watch the 5-minute Loom demo →](https://www.loom.com/share/26a183025d574435bc41a3c34d036c60)
+## Demo & Deliverable
 
-## 📄 Written Deliverable
-[Project Deliverable — Tasks 1–7](docs/Amicus_AI_Project_Deliverable.docx)
+- [5-minute Loom demo](https://www.loom.com/share/26a183025d574435bc41a3c34d036c60)
+- [Project Deliverable — Tasks 1–7](docs/Amicus_AI_Project_Deliverable.docx)
 
 ---
 
@@ -20,91 +21,119 @@ Amicus AI is a privacy-first legal document analysis tool built for litigation a
 - [Evaluation Results](#evaluation-results)
 - [Setup](#setup)
 - [Usage](#usage)
+- [Development Workflow & CI](#development-workflow--ci)
 - [Query Tips](#query-tips)
-- [Known Limitations & Roadmap](#known-limitations--roadmap)
 - [Project Structure](#project-structure)
+- [Known Limitations](#known-limitations)
 
 ---
 
 ## Features
 
 - **Query Documents** — Ask natural language questions across multiple uploaded legal documents simultaneously. Sources cited with relevance scores.
+- **Analysis Engine** — Four hardware profiles (Standard / Enhanced / Professional / Enterprise) that select the best local model for your machine. No model IDs exposed to attorneys.
+- **Agentic Mode** — Six-node LangGraph pipeline with query planning, multi-pass retrieval, attribution-aware synthesis, and self-critique loop. Automatically routed for complex contradiction and cross-document questions.
 - **Summarize** — Generate structured summaries of individual documents or entire case files.
-- **Redact & Template** — Automatically detect and replace PII (names, organizations, dates, case numbers, SSNs, phone numbers) with placeholders. Export redacted documents as reusable templates.
+- **Redact & Template** — Automatically detect and replace PII (names, organizations, dates, case numbers, SSNs, phone numbers, addresses) with placeholders. Export redacted documents as reusable templates.
 - **OCR Support** — Scanned PDFs are automatically processed via Tesseract OCR. No manual conversion required.
 - **Multi-format ingestion** — PDF (digital and scanned), DOCX, TXT, XLSX, CSV.
-- **Three retrieval modes** — Vector, Hybrid (HyDE + BM25), and Rerank (cross-encoder). Selectable in the UI.
+- **Case Management** — Isolated ChromaDB collections per case; switch cases without re-ingesting.
+- **Windows & macOS** — Fully cross-platform via pathlib; launch scripts for both.
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     Streamlit UI                        │
-│         Query · Summarize · Redact · Settings           │
-└────────────────────────┬────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────┐
-│                    LangChain RAG                        │
-│         rag_query() → retrieve → prompt → LLM           │
-└──────┬─────────────────────────────────────┬────────────┘
-       │                                     │
-┌──────▼──────────┐                 ┌────────▼────────────┐
-│   ChromaDB      │                 │   Llama 3.1 8B      │
-│   Vector Store  │                 │   via Ollama        │
-│   cosine sim    │                 │   local inference   │
-└──────┬──────────┘                 └─────────────────────┘
-       │
-┌──────▼──────────────────────────────────────────────────┐
-│              Three-Stage Retrieval Pipeline             │
-│                                                         │
-│  Stage 1: Hybrid Retrieval (HyDE + BM25 + RRF)         │
-│           → 30 candidate chunks                         │
-│                                                         │
-│  Stage 2: Cross-Encoder Reranking                       │
-│           → cross-encoder/ms-marco-MiniLM-L-6-v2        │
-│           → scored against actual query                 │
-│                                                         │
-│  Stage 3: Top-K Selection                               │
-│           → 7 highest-scoring chunks to LLM            │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                          Streamlit UI                               │
+│        Query · Summarize · Redact · Case Mgmt · Analysis Engine    │
+└───────────────────────────────┬─────────────────────────────────────┘
+                                │
+                ┌───────────────▼───────────────┐
+                │   Complexity Router (app.py)  │
+                │   HARD/CONTRADICTION→agentic  │
+                │   others → rerank             │
+                └───────┬───────────────┬───────┘
+                        │               │
+          ┌─────────────▼──┐     ┌──────▼──────────────────────────┐
+          │  Rerank Mode   │     │  Agentic RAG (LangGraph 6-node) │
+          │                │     │                                  │
+          │ 1. HyDE embed  │     │ 1. query_planning               │
+          │ 2. BM25 sparse │     │ 2. multi_retrieve               │
+          │ 3. RRF fusion  │     │ 3. rerank_filter                │
+          │ 4. Cross-enc   │     │ 4. attribute_sources            │
+          │    reranking   │     │ 5. synthesize                   │
+          │ 5. Top-7 → LLM │     │ 6. self_critique  → LLM        │
+          └────────────────┘     └─────────────────────────────────┘
+                        │               │
+          ┌─────────────▼───────────────▼──────────────────────────┐
+          │                   ChromaDB                              │
+          │        Persistent per-case vector collections          │
+          └─────────────────────────────────────────────────────────┘
+                                │
+          ┌─────────────────────▼──────────────────────────────────┐
+          │               Ollama (local inference)                 │
+          │  Standard: llama3.1:8b  (8GB RAM)                     │
+          │  Enhanced: llama3.3:8b  (16GB RAM)                    │
+          │  Professional: mistral-nemo:12b  (16GB RAM)           │
+          │  Enterprise: llama3.1:70b  (32GB+ RAM)                │
+          └────────────────────────────────────────────────────────┘
 ```
 
-**Models (all local, no API calls):**
-- LLM: `llama3.1:8b` via Ollama
-- Embeddings: `sentence-transformers/all-MiniLM-L6-v2`
-- Reranker: `cross-encoder/ms-marco-MiniLM-L-6-v2`
-- OCR: Tesseract 5.5 via PyMuPDF
+**Shared models (all local, no API calls):**
+| Role | Model |
+|------|-------|
+| LLM | Configured via Analysis Engine (default: `llama3.1:8b`) |
+| Embeddings | `sentence-transformers/all-MiniLM-L6-v2` |
+| Reranker | `cross-encoder/ms-marco-MiniLM-L-6-v2` |
+| OCR | Tesseract 5.5 via PyMuPDF |
 
 ---
 
 ## Retrieval Pipeline
 
-### Vector Mode
-Standard semantic search using cosine similarity against dense embeddings. Fast and effective for straightforward single-document queries.
+### Rerank Mode (recommended default)
+1. **HyDE** — generate a hypothetical answer, embed it, retrieve by semantic similarity
+2. **BM25** — keyword-based sparse retrieval for exact citations and statute numbers
+3. **RRF fusion** — combine vector and BM25 rankings without score normalization
+4. **Cross-encoder reranking** — score all 30 candidates against the real query
+5. **Top-7 selection** — send highest-scoring chunks to LLM
 
-### Hybrid Mode (HyDE + BM25 + RRF)
-Three-component pipeline fused with Reciprocal Rank Fusion:
-- **HyDE** (Hypothetical Document Embeddings): generates a hypothetical answer to the query, embeds it, and retrieves by semantic similarity to that answer — improves recall on abstract questions
-- **BM25**: keyword-based sparse retrieval — excels at exact legal citations, statute numbers, and case names
-- **RRF**: combines vector and BM25 rankings without requiring score normalization
+### Agentic Mode (auto-routed for complex queries)
+A six-node LangGraph pipeline that goes beyond single-pass retrieval:
+1. **query_planning** — decompose the question into sub-queries
+2. **multi_retrieve** — run each sub-query independently through the rerank pipeline
+3. **rerank_filter** — deduplicate and re-score across all retrieved chunks
+4. **attribute_sources** — tag each chunk with document and speaker metadata
+5. **synthesize** — generate a structured, attributed answer
+6. **self_critique** — evaluate the answer against the retrieved evidence; revise if needed
 
-Best for: exact citation lookup, large corpora, queries where you're not sure which document has the answer.
-
-### Rerank Mode (Default)
-Extends hybrid with a cross-encoder re-ranking stage:
-1. Hybrid retrieves 30 candidate chunks
-2. Cross-encoder scores each chunk against the actual query using full cross-attention (not just embedding similarity)
-3. Top 7 highest-scoring chunks sent to LLM
-
-Best for: complex queries, cross-document synthesis, precision-critical legal research. **Recommended default.**
+### Multi-hop Mode
+Between rerank and agentic in complexity: runs initial retrieval, extracts gaps using the LLM, runs targeted follow-up queries for referenced but unexplained entities, and merges all chunks before synthesis.
 
 ---
 
 ## Evaluation Results
 
-Evaluated against 15 synthetic Q&A pairs using RAGAS metrics. All three retrieval modes compared.
+### LLM-Judge Eval — Chen v. Nexagen corpus (30 questions)
+
+Evaluated using an LLM-based judge against 30 human-authored questions spanning five categories: FACTUAL, CROSS-DOC, CONTRADICTION, TEMPORAL, and TRAP (hallucination guards). Routing: HARD and CONTRADICTION questions → agentic; all others → rerank.
+
+| Category | Pass | Total | Rate |
+|----------|------|-------|------|
+| FACTUAL | — | 8 | — |
+| CROSS-DOC | — | 8 | — |
+| CONTRADICTION | — | 6 | — |
+| TEMPORAL | — | 4 | — |
+| TRAP | — | 4 | — |
+| **Overall** | **19** | **30** | **63%** |
+
+Baseline (pre-agentic, multihop mode): 16/30 (53%). The LangGraph agentic pipeline added +3 questions (+10 percentage points).
+
+### RAGAS Eval — Three retrieval modes
+
+Evaluated against 15 synthetic Q&A pairs using RAGAS metrics.
 
 | Metric | Vector | Hybrid | Rerank |
 |--------|--------|--------|--------|
@@ -113,121 +142,146 @@ Evaluated against 15 synthetic Q&A pairs using RAGAS metrics. All three retrieva
 | Context Precision | 0.783 | 0.613 | **0.800** |
 | Context Recall | **0.867** | 0.667 | 0.800 |
 
-**Key findings:**
-- Rerank achieves highest context precision (0.80) — 80% of retrieved chunks are relevant, critical for legal work where irrelevant context can mislead analysis
-- Hybrid achieves highest answer relevancy (0.77) — broader candidate pool gives LLM more material for targeted answers
-- Rerank matches or exceeds vector on all metrics except recall, making it the best all-around choice for production use
-
-*Note: Synthetic benchmarks favor vector retrieval because test questions are generated from document text and naturally match vector vocabulary. Hybrid and rerank show their advantage on real attorney queries involving cross-document synthesis and exact citation lookup.*
+Rerank achieves the highest context precision (0.80) — 80% of retrieved chunks are relevant, the most important metric for legal work where irrelevant context can mislead analysis.
 
 ---
 
 ## Setup
 
-### Prerequisites
-- macOS (Apple Silicon recommended) or Linux
-- [Ollama](https://ollama.ai) installed and running
-- Python 3.11+
-- [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) (`brew install tesseract` on macOS)
-- Node.js (for document generation scripts only)
+For step-by-step instructions, see the platform-specific guide:
 
-### Installation
+- **macOS:** [install/mac_setup.md](install/mac_setup.md)
+- **Windows:** [install/windows_setup.md](install/windows_setup.md)
+
+### Quick start (macOS)
 
 ```bash
-# Clone the repository
 git clone https://github.com/ncc1701mike/legal-ai-assistant.git
 cd legal-ai-assistant
 
-# Create and activate virtual environment
-python -m venv venv
-source venv/bin/activate
-
-# Install dependencies
+python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
-# Pull the LLM
 ollama pull llama3.1:8b
 
-# Start the app
-streamlit run app.py
+./launch.sh          # macOS
+# or: launch.bat     # Windows
 ```
 
-### First Run
-The embedding model (`all-MiniLM-L6-v2`, ~90MB) and reranker (`ms-marco-MiniLM-L-6-v2`, ~90MB) will download automatically on first use and cache locally. No subsequent downloads required.
+The embedding model (`all-MiniLM-L6-v2`, ~90MB) and reranker (`ms-marco-MiniLM-L-6-v2`, ~90MB) download automatically on first use and cache locally.
 
 ---
 
 ## Usage
 
 ### Uploading Documents
-Drag and drop or browse to upload documents in the sidebar. Supported formats: PDF, DOCX, TXT, XLSX, CSV. Scanned PDFs are automatically OCR'd via Tesseract.
+Drag and drop or browse to upload documents in the sidebar. Supported formats: PDF, DOCX, TXT, XLSX, CSV. Scanned PDFs are automatically OCR'd.
+
+### Case Management
+Create named cases (e.g., `chen_v_nexagen`) to isolate document collections. Switch cases in the sidebar without re-ingesting.
 
 ### Querying
-Type natural language questions in the Query Documents tab. Use the **Chunks to Retrieve** slider (default: 7) to control how much context the LLM receives — higher values improve cross-document synthesis at the cost of response speed.
+Type natural language questions in the Query Documents tab. The system automatically routes to agentic mode for complex questions and rerank mode for simpler ones. Use the **Chunks** slider (default: 7) to control context depth.
 
-### Retrieval Mode Selection
-Use the **Mode** dropdown in the sidebar:
-- **rerank** — best precision, recommended default
-- **hybrid** — best for exact citations and large corpora
-- **vector** — fastest, good for simple single-document queries
-
-### Summarize
-Select documents to summarize in the Summarize tab. Summaries are structured and citation-aware.
+### Analysis Engine (sidebar)
+Select your hardware profile — Standard, Enhanced, Professional, or Enterprise. The system detects your RAM and shows only profiles your hardware can run. IT admins can see model IDs and pull commands in the collapsed expander.
 
 ### Redact
-Upload a document in the Redact tab, select PII categories to replace, and download the redacted version as a reusable template.
+Upload a document in the Redact tab, select PII categories, and download the redacted version as a reusable template.
+
+---
+
+## Development Workflow & CI
+
+### CI Pipeline
+
+Every push to `main` triggers a GitHub Actions workflow that:
+1. Starts an Ollama Docker service and pulls `llama3.1:8b`
+2. Installs Python dependencies
+3. Runs a 10-question diagnostic eval subset (`eval/eval_ci.py`)
+4. Fails the workflow if pass rate drops below 70%
+
+The 10 questions are selected to cover each failure mode: simple fact retrieval (FACTUAL), cross-document synthesis (CROSS-DOC), contradiction detection (CONTRADICTION), date reasoning (TEMPORAL), and hallucination resistance (TRAP).
+
+```
+push to main
+    │
+    ▼
+GitHub Actions: ci.yml
+    ├── Start Ollama service (Docker)
+    ├── Pull llama3.1:8b
+    ├── pip install -r requirements.txt
+    ├── python eval/eval_ci.py
+    │       ├── 10 questions × LLM-judge scoring
+    │       └── exit 0 (≥70%) or exit 1 (<70%)
+    └── Upload eval/results_history.jsonl as artifact
+```
+
+### Regression Tracking
+
+Every eval run (CI or full) appends a record to `eval/results_history.jsonl`:
+
+```bash
+# Run the full 30-question eval and record history
+python eval/eval_batch1.py
+
+# View score progression over time
+python eval/show_history.py
+
+# Filter to CI runs only
+python eval/show_history.py --ci
+```
+
+### Pre-commit Smoke Test (optional)
+
+A 3-question smoke test catches regressions before they reach CI:
+
+```bash
+# Install
+cp scripts/pre_commit_check.py .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+
+# Bypass for a single commit
+git commit --no-verify
+```
+
+The hook passes if at least 2 of 3 questions pass (Q01 FACTUAL, Q17 CONTRADICTION, Q27 TRAP). Infrastructure failures (Ollama not running) are treated as pass so the hook never blocks work on non-eval machines.
+
+### Running the Full Eval Locally
+
+```bash
+# Activate venv and ensure Ollama is running
+source venv/bin/activate
+ollama serve &
+
+# 10-question CI subset (~8 minutes)
+python eval/eval_ci.py
+
+# Full 30-question eval (~45 minutes)
+python eval/eval_batch1.py
+
+# Score history
+python eval/show_history.py
+```
 
 ---
 
 ## Query Tips
 
 **Use descriptive language, not section numbers.**
-The system retrieves by semantic meaning, not document structure. Instead of:
-> "What does Section 5.1 say?"
-
-Ask:
-> "What does the settlement agreement say about neutral references?"
+The system retrieves by semantic meaning. Instead of "What does Section 5.1 say?", ask "What does the settlement agreement say about neutral references?"
 
 **Break complex questions into follow-ups.**
-For multi-part questions spanning many documents, start broad then drill down:
-> "What were the grounds for the termination?" → "Was the position later refilled?"
+Start broad, then drill down: "What were the grounds for the termination?" → "Was the position later refilled?"
 
 **Increase chunks for cross-document synthesis.**
-If an answer seems incomplete and you know the information is in your documents, increase the Chunks slider to 9 or 10 and re-ask.
+If an answer seems incomplete, increase the Chunks slider to 9 or 10 and re-ask.
 
 **Use hybrid mode for exact citations.**
-When looking up specific case numbers, statute citations, or charge numbers, switch to hybrid mode — BM25 excels at exact string matching.
+When looking up specific case numbers or statute citations, switch to hybrid mode — BM25 excels at exact string matching.
 
----
-
-## Known Limitations & Roadmap
-
-### Current Limitations
-
-**1. Section-number retrieval**
-Queries using formal section numbers (e.g., "Section 5.1") can fail to retrieve the correct chunk because the section header and content may be in adjacent chunks and the cross-encoder doesn't score "Section 5.1" as semantically meaningful. **Workaround:** Use descriptive natural language queries.
-
-*Roadmap fix:* Implement document structure-aware chunking that keeps section headers attached to their content using a sliding window that always includes the nearest preceding heading. Alternatively, add a metadata layer that indexes section numbers separately and allows direct lookup by section reference.
-
-**2. Cross-document synthesis depth**
-Complex queries requiring synthesis across 4+ documents may miss evidence that requires very specific sub-queries to surface. The system retrieves by semantic proximity to the query, so evidence that's relevant but phrased differently than the question may not rank highly.
-
-*Roadmap fix:* Implement **multi-hop retrieval** — after the initial retrieval, extract key entities and facts from the top chunks, then run a second retrieval pass using those entities as additional queries. This is sometimes called "iterative retrieval" or "chain-of-thought RAG." LangGraph's agent framework is already in the stack and would support this pattern.
-
-**3. LLM source attribution**
-When synthesizing multiple documents, the LLM occasionally misattributes which person said what (e.g., attributing a lawyer's internal memo analysis to an expert witness). The retrieved chunks are correct but the LLM conflates speakers.
-
-*Roadmap fix:* Prepend each chunk with a structured metadata header before sending to the LLM: `[SOURCE: expert_witness_deposition.txt | SPEAKER: Dr. Margaret Okonkwo]`. This gives the LLM explicit speaker context and reduces conflation.
-
-**4. OCR quality on complex layouts**
-Tesseract OCR works well on standard court documents but can produce artifacts on multi-column layouts, tables, or low-resolution scans (visible as run-together words like "motionona" instead of "motion on a").
-
-*Roadmap fix:* Implement a post-OCR cleanup step using the LLM itself — pass OCR'd text through a short "fix spacing and formatting errors" prompt before chunking. Alternatively, upgrade to PyMuPDF's premium OCR or integrate a vision model (LLaVA) for complex layouts.
-
-**5. Rerank score display for non-rerank modes**
-When using vector or hybrid mode, the displayed relevance scores are raw cosine similarity or BM25 scores respectively, which are not directly comparable to rerank scores. Low cosine similarity scores (~0.05) can appear misleadingly low even when the answer is correct.
-
-*Roadmap fix:* Normalize scores to a 0–1 scale per mode, or label them differently ("BM25 score" vs "semantic similarity" vs "rerank score") so the display is mode-aware.
+**For contradiction questions, use agentic mode.**
+Questions that ask "what does each party claim?" or "what is the dispute about X?" benefit most from the self-critique loop.
 
 ---
 
@@ -235,26 +289,49 @@ When using vector or hybrid mode, the displayed relevance scores are raw cosine 
 
 ```
 legal-ai-assistant/
-├── app.py                    # Streamlit UI — main application
+├── app.py                         # Streamlit UI — main application
 ├── modules/
-│   ├── ingestion.py          # Document parsing, chunking, ChromaDB ingestion
-│   │                         # Supports PDF (digital + OCR), DOCX, TXT, XLSX, CSV
-│   ├── retrieval.py          # Three retrieval modes: vector, hybrid, rerank
-│   │                         # HyDE, BM25, RRF fusion, cross-encoder reranking
-│   ├── llm.py                # RAG query, summarization, Ollama connection
-│   └── redaction.py          # PII detection and template generation
+│   ├── ingestion.py               # Document parsing, chunking, ChromaDB ingestion
+│   ├── retrieval.py               # Vector, hybrid, rerank retrieval modes
+│   ├── llm.py                     # RAG query, streaming, model config (get/set_primary_model)
+│   ├── agentic_rag.py             # LangGraph 6-node agentic pipeline
+│   ├── multihop.py                # Multi-hop retrieval (gap extraction + follow-up)
+│   ├── case_manager.py            # Per-case ChromaDB collection management
+│   ├── redaction.py               # PII detection and template generation
+│   ├── hardware_detect.py         # RAM detection, hardware profiles, model recommendations
+│   ├── update_checker.py          # Ollama model update checking (offline-safe)
+│   ├── feedback.py                # Query feedback logging
+│   ├── cache.py                   # Query result caching (diskcache)
+│   ├── citation_verifier.py       # Citation grounding verification
+│   └── search.py                  # Optional: case law search (requires internet)
+├── eval/
+│   ├── eval_batch1.py             # Full 30-question eval runner
+│   ├── eval_ci.py                 # 10-question CI subset eval
+│   ├── eval_regression.py         # append_result() — regression history writer
+│   ├── show_history.py            # ASCII table of score progression
+│   └── results_history.jsonl      # Persistent eval history (one JSON per line)
 ├── evaluation/
-│   ├── run_evaluation.py     # RAGAS evaluation runner — all three modes
-│   ├── evaluation.ipynb      # Results visualization and analysis notebook
-│   ├── testset.json          # 15 synthetic Q&A pairs (GPT-4o generated)
-│   ├── results_vector.json   # Vector baseline RAGAS scores
-│   ├── results_hybrid.json   # Hybrid RAGAS scores
-│   ├── results_rerank.json   # Rerank RAGAS scores
-│   └── results_combined.json # Three-way comparison
+│   ├── run_evaluation.py          # RAGAS evaluation runner
+│   ├── evaluation.ipynb           # Results visualization notebook
+│   └── testset.json               # 15 synthetic Q&A pairs
+├── tests/
+│   ├── test_case_manager.py
+│   ├── test_citation_verifier.py
+│   ├── test_hardware_detect.py
+│   └── test_update_checker.py
+├── install/
+│   ├── mac_setup.md               # Step-by-step macOS setup guide
+│   └── windows_setup.md           # Step-by-step Windows setup guide
+├── scripts/
+│   └── pre_commit_check.py        # Optional pre-commit 3-question smoke test
+├── .github/workflows/
+│   └── ci.yml                     # GitHub Actions CI workflow
 ├── db/
-│   ├── chroma/               # ChromaDB persistent vector store
-│   └── embeddings/           # Cached sentence-transformer models
-├── data/                     # Sample documents for testing
+│   ├── chroma/                    # ChromaDB persistent vector store (gitignored)
+│   └── embeddings/                # Cached sentence-transformer models (gitignored)
+├── data/                          # Corpus documents (gitignored — attorney-client privilege)
+├── launch.sh                      # macOS launch script
+├── launch.bat                     # Windows launch script
 └── requirements.txt
 ```
 
@@ -264,16 +341,18 @@ legal-ai-assistant/
 
 | Component | Technology |
 |-----------|-----------|
-| LLM | Llama 3.1 8B (Ollama) |
+| LLM | Llama 3.1 8B / 3.3 8B / Mistral Nemo 12B / Llama 3.1 70B (Ollama) |
 | Embeddings | all-MiniLM-L6-v2 (sentence-transformers) |
 | Reranker | ms-marco-MiniLM-L-6-v2 (cross-encoder) |
-| Vector DB | ChromaDB (persistent, local) |
+| Vector DB | ChromaDB (persistent, local, per-case) |
+| Agentic Pipeline | LangGraph StateGraph (6 nodes) |
 | RAG Framework | LangChain |
 | OCR | Tesseract 5.5 via PyMuPDF |
 | BM25 | rank-bm25 |
-| Evaluation | RAGAS |
+| Evaluation | LLM judge + RAGAS |
 | UI | Streamlit |
 | Language | Python 3.11 |
+| CI | GitHub Actions + Ollama Docker |
 
 ---
 
@@ -281,8 +360,13 @@ legal-ai-assistant/
 
 All processing is fully local. No data is transmitted to external servers at any time. The application is designed for use with privileged attorney-client communications and work product. No telemetry, no cloud inference, no external API calls during normal operation.
 
-The only external network calls occur during initial model downloads (embedding model and reranker), which are cached locally and not repeated.
+The only external network calls occur during:
+- Initial model downloads (embedding model and reranker, cached locally after first use)
+- Ollama model pulls (`ollama pull <model>`) initiated by the user
+- Optional model update checks (update checker in Analysis Engine, user-initiated, fails gracefully offline)
+
+Case documents in `data/` and the ChromaDB store in `db/chroma/` are gitignored and never committed.
 
 ---
 
-*Built as a two-week prototype for litigation practice. Evaluated and stress-tested against a synthetic 5-document legal corpus spanning DOCX, TXT, digital PDF, and scanned PDF formats.*
+*Built as a two-week prototype for litigation practice. Evaluated and stress-tested against a synthetic 5-document legal corpus spanning DOCX, TXT, digital PDF, and scanned PDF formats. Batch eval: 19/30 (63%) on Chen v. Nexagen, up from 16/30 (53%) baseline.*

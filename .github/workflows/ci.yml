@@ -1,0 +1,90 @@
+name: CI Eval
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs on the same branch when a new push arrives
+concurrency:
+  group: ci-eval-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eval:
+    name: 10-question regression eval
+    runs-on: ubuntu-latest
+    timeout-minutes: 45  # model pull (~4.7GB) + 10 questions @ ~4 min each
+
+    services:
+      ollama:
+        image: ollama/ollama:latest
+        ports:
+          - 11434:11434
+        options: >-
+          --health-cmd "curl -sf http://localhost:11434/api/tags"
+          --health-interval 15s
+          --health-timeout 10s
+          --health-retries 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Pull llama3.1:8b via REST API (Ollama CLI not on the runner host)
+      - name: Pull llama3.1:8b
+        run: |
+          echo "Pulling llama3.1:8b (4.7 GB — expect 10-15 minutes)..."
+          curl -sf http://localhost:11434/api/pull \
+            -d '{"name": "llama3.1:8b"}' \
+            --max-time 900 \
+            -o /tmp/pull_log.txt
+          cat /tmp/pull_log.txt | tail -5
+
+      - name: Verify model available
+        run: |
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:11434/api/tags | grep -q "llama3.1:8b"; then
+              echo "llama3.1:8b is ready"; exit 0
+            fi
+            echo "Waiting for model ($i/20)..."; sleep 15
+          done
+          echo "ERROR: model not available after 5 minutes" && exit 1
+
+      # Ingest corpus documents — only runs if PDFs/TXTs are present in data/
+      # Note: case documents are gitignored for attorney-client privilege.
+      # To run a meaningful eval in CI, either:
+      #   a) Use a self-hosted runner where data/ is pre-populated, or
+      #   b) Add synthetic test documents to data/ and commit them.
+      - name: Ingest corpus (if documents present)
+        run: |
+          DOC_COUNT=$(find data/ -name "*.pdf" -o -name "*.txt" -o -name "*.docx" 2>/dev/null | wc -l)
+          if [ "$DOC_COUNT" -gt "0" ]; then
+            echo "Found $DOC_COUNT documents in data/ — ingesting..."
+            python reingest.py
+          else
+            echo "No corpus documents in data/ — skipping ingest."
+            echo "The eval will run but answers will reflect an empty corpus."
+          fi
+
+      - name: Run CI eval
+        run: python eval/eval_ci.py
+
+      # Upload regression history as a build artifact for trend tracking
+      - name: Upload eval history
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-history-${{ github.sha }}
+          path: eval/results_history.jsonl
+          if-no-files-found: ignore

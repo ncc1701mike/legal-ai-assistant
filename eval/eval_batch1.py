@@ -9,9 +9,14 @@ import sys
 import time
 import json
 from datetime import datetime
+from pathlib import Path
 
-sys.path.insert(0, "/Users/michaeldoran/AIE9/legal-ai-assistant")
-from modules.llm import rag_query, get_llm
+_PROJECT_ROOT = Path(__file__).parent.parent
+_EVAL_DIR = Path(__file__).parent
+sys.path.insert(0, str(_PROJECT_ROOT))
+sys.path.insert(0, str(_EVAL_DIR))
+
+from modules.llm import rag_query, get_llm, get_primary_model
 from langchain_core.messages import HumanMessage
 
 QUESTIONS = [
@@ -368,6 +373,31 @@ def run_eval():
             "baseline": 0.53, "results": results
         }, f, indent=2)
     print(f"\n  Results saved: {out_path}")
+
+    # Append to persistent regression history
+    try:
+        from eval_regression import append_result
+        corpus_size = -1
+        try:
+            from modules.ingestion import chroma_client, COLLECTION_NAME
+            corpus_size = chroma_client.get_or_create_collection(COLLECTION_NAME).count()
+        except Exception:
+            pass
+        append_result(
+            eval_type="full",
+            passed=passed,
+            total=total,
+            model_used=get_primary_model(),
+            corpus_size=corpus_size,
+            question_results=[
+                {"id": r["id"], "passed": r["passed"], "mode": r["mode"], "elapsed": r["elapsed"]}
+                for r in results
+            ],
+        )
+        print(f"  History appended: {_EVAL_DIR / 'results_history.jsonl'}")
+    except Exception:
+        pass
+
     print(f"{'='*70}\n")
 
 

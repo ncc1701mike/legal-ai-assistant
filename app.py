@@ -4,6 +4,7 @@
 
 import json
 import os
+import subprocess
 import time
 import logging
 import tempfile
@@ -38,6 +39,7 @@ from modules.hardware_detect import (
 from modules.update_checker import (
     check_for_model_updates, set_last_update_check, get_last_update_check,
 )
+from modules.setup_wizard import run_setup_check, SetupStatus
 from modules.retrieval import normalize_score
 from modules.cache import clear_cache
 
@@ -335,6 +337,179 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+
+# ── Setup Gate ────────────────────────────────────────────────────────────────
+# Runs on every page load. Shows a guided setup experience instead of the main
+# app whenever Ollama is not running or the configured model is not installed.
+# Calls st.stop() to prevent any further rendering when setup is needed.
+
+if "setup_pulling" not in st.session_state:
+    st.session_state.setup_pulling = False
+
+
+def _render_setup_page(status: SetupStatus) -> None:
+    """Full-screen attorney-friendly setup experience."""
+    from modules.hardware_detect import _PROFILES
+
+    _, _col, _ = st.columns([1, 2, 1])
+    with _col:
+        st.markdown("# ⚖️ Amicus AI")
+        st.markdown("**Private legal document intelligence — runs entirely on your computer**")
+        st.markdown("---")
+
+        # ── STATE 1: Ollama not running ───────────────────────────────────────
+        if not status.ollama_running:
+            st.markdown("## One more thing to get started")
+            st.markdown(
+                "Amicus uses a local AI engine called **Ollama** to analyze your documents "
+                "privately on your computer. It looks like Ollama isn't running yet."
+            )
+
+            if status.platform == "mac":
+                st.info(
+                    "**Open the Ollama app** from your Applications folder.  \n"
+                    "After it opens, look for the llama icon 🦙 in your menu bar "
+                    "(top-right corner of your screen). That means it's running."
+                )
+                if st.button("Try to Start Ollama Automatically", type="primary"):
+                    os.system("open -a Ollama")
+                    time.sleep(2)
+                    st.rerun()
+
+            elif status.platform == "windows":
+                st.info(
+                    "**Ollama should be running in your system tray.**  \n"
+                    "Look for the llama icon 🦙 near the clock in the bottom-right corner "
+                    "of your screen. If you don't see it, open Ollama from the Start menu."
+                )
+
+            else:
+                st.info(
+                    "Start Ollama by running `ollama serve` in a terminal, "
+                    "then return here."
+                )
+
+            st.markdown("")
+            if st.button("🔄  I've started Ollama — try again", use_container_width=True):
+                st.rerun()
+
+            with st.expander("Need help installing Ollama?"):
+                st.markdown(
+                    "Download Ollama for free from **[ollama.ai](https://ollama.ai)**. "
+                    "It's a small app that runs AI models privately on your computer. "
+                    "See [install/QUICK_START.md](install/QUICK_START.md) for step-by-step instructions."
+                )
+
+        # ── STATE 2: Model not installed ──────────────────────────────────────
+        else:
+            _profile = next(
+                (p for p in _PROFILES if p["model_id"] == status.recommended_model), None
+            )
+            _friendly = _profile["display_name"] if _profile else "Standard"
+            _movies   = max(1, round(status.estimated_download_gb / 2.5))
+
+            st.markdown("## Setting up your Analysis Engine")
+            st.markdown(
+                f"Amicus will install the **{_friendly}** analysis engine — "
+                f"the best fit for your computer based on your hardware."
+            )
+            st.markdown(
+                f"**One-time download: approximately {status.estimated_download_gb:.1f} GB** "
+                f"— about the size of {_movies} HD {'movie' if _movies == 1 else 'movies'}. "
+                f"After this, Amicus works completely offline."
+            )
+
+            with st.expander("Why do I need this?"):
+                st.markdown(
+                    "Amicus analyzes your legal documents using an AI model that runs "
+                    "**entirely on your computer**. Unlike online AI tools, your case files "
+                    "never leave your machine and are never sent to the internet.\n\n"
+                    "The one-time download installs the AI model locally. After that, "
+                    "Amicus can work without any internet connection at all — your documents "
+                    "stay completely private."
+                )
+
+            st.markdown("")
+
+            if st.session_state.setup_pulling:
+                # ── Active download in progress ───────────────────────────────
+                st.markdown("**Downloading Analysis Engine — please wait...**")
+                _prog_bar   = st.progress(0.0)
+                _status_txt = st.empty()
+                _status_txt.text("Starting download...")
+
+                _pull_ok = False
+                try:
+                    import requests as _req
+                    _resp = _req.post(
+                        "http://localhost:11434/api/pull",
+                        json={"name": status.recommended_model},
+                        stream=True,
+                        timeout=None,
+                    )
+                    for _raw_line in _resp.iter_lines():
+                        if not _raw_line:
+                            continue
+                        try:
+                            _d    = json.loads(_raw_line.decode() if isinstance(_raw_line, bytes) else _raw_line)
+                            _tot  = _d.get("total", 0)
+                            _done = _d.get("completed", 0)
+                            _msg  = _d.get("status", "")
+                            if _tot > 0:
+                                _pct = min(_done / _tot, 1.0)
+                                _prog_bar.progress(_pct)
+                                _gb_d = _done / (1024 ** 3)
+                                _gb_t = _tot  / (1024 ** 3)
+                                _status_txt.text(f"{_msg} — {_gb_d:.2f} / {_gb_t:.2f} GB")
+                            else:
+                                _status_txt.text(_msg)
+                            if _msg == "success":
+                                _pull_ok = True
+                        except (json.JSONDecodeError, Exception):
+                            pass
+                    _pull_ok = True
+                except Exception as _e:
+                    st.error(f"Download failed: {_e}. Check your internet connection and try again.")
+
+                if _pull_ok:
+                    _prog_bar.progress(1.0)
+                    _status_txt.text("Complete!")
+                    from modules.llm import set_primary_model as _spm
+                    _spm(status.recommended_model)
+                    st.session_state.setup_pulling = False
+                    st.success(
+                        f"Your {_friendly} Analysis Engine is ready. "
+                        "Amicus is launching now..."
+                    )
+                    time.sleep(1.5)
+                    st.rerun()
+                else:
+                    st.session_state.setup_pulling = False
+                    st.rerun()
+
+            else:
+                if st.button(
+                    f"⬇️  Set Up Now  ({status.estimated_download_gb:.1f} GB download)",
+                    type="primary",
+                    use_container_width=True,
+                ):
+                    st.session_state.setup_pulling = True
+                    st.rerun()
+
+                st.caption(
+                    "Your internet connection is needed only for this one-time setup. "
+                    "After that, Amicus works completely offline."
+                )
+
+
+_setup_status = run_setup_check()
+if not _setup_status.ready_to_use:
+    _render_setup_page(_setup_status)
+    st.stop()
+
+# ── End Setup Gate ────────────────────────────────────────────────────────────
+
+
 # ── Session State ─────────────────────────────────────────────────────────────
 
 if "messages" not in st.session_state:
@@ -347,8 +522,6 @@ if "confirm_delete" not in st.session_state:
     st.session_state.confirm_delete = False
 if "update_check_result" not in st.session_state:
     st.session_state.update_check_result = None
-if "auto_profile_applied" not in st.session_state:
-    st.session_state.auto_profile_applied = False
 
 # Resolve active case on first load
 if "active_case" not in st.session_state:
@@ -464,116 +637,88 @@ with st.sidebar:
     # ── Analysis Engine ───────────────────────────────────────────────────────
     st.markdown("### Analysis Engine")
 
-    _ram_gb       = get_system_ram_gb()
-    _installed    = get_available_ollama_models()
-    _profiles     = get_user_friendly_configs(ram_gb=_ram_gb)
+    _ram_gb        = get_system_ram_gb()
+    _installed     = get_available_ollama_models()
     _current_model = get_primary_model()
-
-    # Auto-select best available profile on very first launch (no user choice yet)
-    if not st.session_state.auto_profile_applied:
-        st.session_state.auto_profile_applied = True
-        _cfg_path = Path("db") / "user_config.json"
-        try:
-            _has_explicit = _cfg_path.exists() and bool(
-                json.loads(_cfg_path.read_text()).get("primary_model")
-            )
-        except Exception:
-            _has_explicit = False
-        if not _has_explicit:
-            _best = get_auto_recommended_profile(ram_gb=_ram_gb, installed=_installed)
-            set_primary_model(_best["model_id"])
-            _current_model = _best["model_id"]
-
-    _cur_profile  = get_current_profile(_current_model)
-    _cur_name     = _cur_profile["display_name"] if _cur_profile else "Standard"
-
-    # Status indicator — green / yellow / red
+    _cur_profile   = get_current_profile(_current_model)
+    _cur_name      = _cur_profile["display_name"] if _cur_profile else "Standard"
     _cur_installed = _current_model in _installed
     _cur_ram_ok    = (_cur_profile is None) or (_ram_gb >= _cur_profile["min_ram_gb"])
-    if _cur_installed and _cur_ram_ok:
-        _dot, _status_txt = "#2EA043", "optimal for your hardware"
-    elif _cur_installed:
-        _dot, _status_txt = "#F4A522", "running — RAM may be low"
-    else:
-        _dot, _status_txt = "#CF222E", "engine not installed"
 
+    if _cur_installed and _cur_ram_ok:
+        _dot, _status_mark = "#2EA043", "✅"
+    elif _cur_installed:
+        _dot, _status_mark = "#F4A522", "⚠️ RAM may be low"
+    else:
+        _dot, _status_mark = "#CF222E", "⚠️ Not installed"
+
+    # Single-line status — no model IDs, no selectors for standard users
     st.markdown(
-        f'<div style="background:rgba(2,195,154,0.08);border-left:3px solid #02C39A;'
-        f'padding:6px 10px;border-radius:4px;margin-bottom:8px;font-size:0.82rem;">'
-        f'<span style="color:{_dot};font-size:1rem;">●</span> '
-        f'<span style="color:#02C39A !important;">'
-        f'Currently running: <strong>{_cur_name}</strong></span>'
-        f'<br><span style="color:#8B949E;font-size:0.75rem;">{_status_txt}</span>'
-        f'</div>',
+        f'<div style="background:rgba(2,195,154,0.08);border-left:3px solid {_dot};'
+        f'padding:8px 12px;border-radius:4px;margin-bottom:6px;">'
+        f'<span style="color:#E6EDF3;font-size:0.90rem;">'
+        f'<span style="color:{_dot};">●</span>&nbsp; '
+        f'<strong>{_cur_name}</strong>&nbsp; {_status_mark}'
+        f'</span></div>',
         unsafe_allow_html=True,
     )
 
-    # Profile selector — no model IDs visible to user
-    _profile_map = {p["profile_id"]: p for p in _profiles}
-    _profile_ids = [p["profile_id"] for p in _profiles]
-
-    _cur_pid  = (
-        _cur_profile["profile_id"]
-        if _cur_profile and _cur_profile["profile_id"] in _profile_ids
-        else _profile_ids[0]
-    )
-    _sel_idx  = _profile_ids.index(_cur_pid)
-
-    def _profile_label(pid: str) -> str:
-        p    = _profile_map[pid]
-        mark = "✅" if p["model_id"] in _installed else "⬇️"
-        return f'{mark}  {p["display_name"]} — {p["recommended_for"]}'
-
-    _selected_pid = st.selectbox(
-        "Select your analysis profile",
-        options=_profile_ids,
-        format_func=_profile_label,
-        index=_sel_idx,
-        key="profile_selector",
-        help=(
-            "Standard works on any laptop. "
-            "Enhanced and Professional offer deeper document analysis "
-            "but require a newer MacBook Pro or Windows PC with more memory."
-        ),
-    )
-
-    _sel_profile   = _profile_map[_selected_pid]
-    _sel_installed = _sel_profile["model_id"] in _installed
-
-    if _sel_installed:
-        st.caption(_sel_profile["description"])
-    else:
-        st.markdown(
-            f'<div style="background:rgba(244,165,34,0.08);border-left:3px solid #F4A522;'
-            f'padding:6px 10px;border-radius:4px;font-size:0.80rem;color:#E6EDF3;">'
-            f'To enable <strong>{_sel_profile["display_name"]}</strong>, ask your IT '
-            f'administrator to run the setup command below.'
-            f'</div>',
-            unsafe_allow_html=True,
+    # Advanced expander — IT administrators only
+    with st.expander("Advanced (IT Administrators Only)"):
+        st.warning(
+            "Changing the Analysis Engine requires downloading additional software "
+            "(up to 40 GB). Only change this setting with guidance from your IT administrator."
         )
-        with st.expander("IT Setup Instructions"):
+
+        _profiles    = get_user_friendly_configs(ram_gb=_ram_gb)
+        _profile_map = {p["profile_id"]: p for p in _profiles}
+        _profile_ids = [p["profile_id"] for p in _profiles]
+        _cur_pid     = (
+            _cur_profile["profile_id"]
+            if _cur_profile and _cur_profile["profile_id"] in _profile_ids
+            else _profile_ids[0]
+        )
+
+        def _profile_label(pid: str) -> str:
+            p    = _profile_map[pid]
+            mark = "✅" if p["model_id"] in _installed else "⬇️"
+            return f'{mark}  {p["display_name"]} — {p["recommended_for"]}'
+
+        _selected_pid = st.selectbox(
+            "Analysis profile",
+            options=_profile_ids,
+            format_func=_profile_label,
+            index=_profile_ids.index(_cur_pid),
+            key="profile_selector",
+        )
+
+        _sel_profile   = _profile_map[_selected_pid]
+        _sel_installed = _sel_profile["model_id"] in _installed
+
+        if not _sel_installed:
+            st.caption("Install command for IT:")
             st.code(get_pull_command(_sel_profile["model_id"]), language="bash")
 
-    if st.button("Apply", key="apply_profile_btn", disabled=not _sel_installed):
-        set_primary_model(_sel_profile["model_id"])
-        st.rerun()
+        if st.button("Apply", key="apply_profile_btn", disabled=not _sel_installed):
+            set_primary_model(_sel_profile["model_id"])
+            st.rerun()
 
-    # Update checker
-    st.markdown("")
-    if st.button("🔄 Check for Updates", key="check_updates_btn", use_container_width=True):
-        with st.spinner("Checking for updates..."):
-            _update_results = check_for_model_updates()
-        set_last_update_check()
-        st.session_state.update_check_result = _update_results
+        st.markdown("---")
 
-    _uc_result = st.session_state.get("update_check_result")
-    if _uc_result is not None:
-        if not _uc_result or all(r.check_failed for r in _uc_result):
-            st.caption("⚠️ Unable to check — you may be offline.")
-        elif any(r.update_available for r in _uc_result):
-            st.warning("Update available for your Analysis Engine — contact IT to update.")
-        else:
-            st.caption("Your analysis engine is up to date ✅")
+        if st.button("🔄 Check for Updates", key="check_updates_btn", use_container_width=True):
+            with st.spinner("Checking..."):
+                _update_results = check_for_model_updates()
+            set_last_update_check()
+            st.session_state.update_check_result = _update_results
+
+        _uc_result = st.session_state.get("update_check_result")
+        if _uc_result is not None:
+            if not _uc_result or all(r.check_failed for r in _uc_result):
+                st.caption("⚠️ Unable to check — you may be offline.")
+            elif any(r.update_available for r in _uc_result):
+                st.warning("Update available — contact IT to update.")
+            else:
+                st.caption("Up to date ✅")
 
     st.markdown("---")
 

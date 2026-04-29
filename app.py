@@ -359,9 +359,14 @@ st.markdown("""
     [data-testid="stSidebar"] .ss-title { font-size: 0.88rem; color: #2C2C2C !important; flex: 1; }
     [data-testid="stSidebar"] .ss-info  { color: #8B949E !important; cursor: help; font-size: 0.8rem; margin-right: 6px; }
     [data-testid="stSidebar"] .ss-body  { border-top: 1.5px solid #2C2C2C; padding: 7px 12px; font-size: 0.75rem; }
-    [data-testid="stSidebar"] .ss-model { color: #03e8b5 !important; font-weight: 600; }
+    [data-testid="stSidebar"] .ss-model    { color: #03e8b5 !important; font-weight: 600; }
     [data-testid="stSidebar"] .ss-dot-ok  { color: #2EA043 !important; }
     [data-testid="stSidebar"] .ss-dot-err { color: #CF222E !important; }
+    [data-testid="stSidebar"] .ss-help-icon {
+        color: rgba(255, 255, 255, 0.72) !important;
+        font-size: 0.85rem;
+        cursor: help;
+    }
 
 </style>
 """, unsafe_allow_html=True)
@@ -644,11 +649,24 @@ with st.sidebar:
         "If you see a red dot, try closing and reopening the app — "
         "if the problem continues, contact your IT administrator."
     )
+
+    # Row 1 — label row above the box, matching Analysis Mode structure exactly
+    _ss_lbl_col, _ss_ico_col = st.columns([0.85, 0.15])
+    with _ss_lbl_col:
+        st.markdown("**System Status**")
+    with _ss_ico_col:
+        st.markdown(
+            f'<div style="text-align:right;padding-top:3px;">'
+            f'<span class="ss-help-icon" title="{_ss_tooltip}">ⓘ</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+    # Row 2 — bordered collapsible box with chevron inside
     st.markdown(
         f'<details class="ss-details">'
         f'<summary class="ss-summary">'
         f'<span class="ss-title">System Status</span>'
-        f'<span class="ss-info" title="{_ss_tooltip}">ⓘ</span>'
         f'</summary>'
         f'<div class="ss-body">'
         f'<span class="ss-model">{_ss_model_display}</span>'

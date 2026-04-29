@@ -609,17 +609,21 @@ with st.sidebar:
     st.markdown("### Settings")
     top_k = st.slider("Speed vs. Performance", min_value=3, max_value=10, value=7)
     st.caption("Lower provides a faster response — higher provides a more in-depth response at the cost of speed.")
-    st.markdown("**Analysis Mode**")
-    _mode_label = st.selectbox(
-        "Analysis Mode",
-        options=["Basic", "Advanced", "Expert"],
-        index=1,
-        help=""" 
+    _am_lbl_col, _am_ico_col = st.columns([0.85, 0.15])
+    with _am_lbl_col:
+        st.markdown("**Analysis Mode**")
+    with _am_ico_col:
+        st.markdown(" ", help="""\
 - Basic — Fast, reliable analysis. Best for straightforward document lookup and single-file queries.
 
 - Advanced — Highest precision. Retrieves and reranks the most relevant passages before answering. Recommended for most cases.
 
-- Expert — Deep cross-document reasoning. Best for complex queries that require connecting facts across multiple files. Adds ~20s processing time.""",
+- Expert — Deep cross-document reasoning. Best for complex queries that require connecting facts across multiple files. Adds ~20s processing time.""")
+    _mode_label = st.selectbox(
+        "Analysis Mode",
+        options=["Basic", "Advanced", "Expert"],
+        index=1,
+        label_visibility="collapsed",
         key="retrieval_mode_label"
     )
     _mode_map = {"Basic": "hybrid", "Advanced": "rerank", "Expert": "agentic"}
@@ -637,19 +641,19 @@ with st.sidebar:
     _ss_model_display = _MODEL_DISPLAY_NAMES.get(_ss_model, _ss_model or "Standard")
     _ss_dot_class     = "ss-dot-ok" if _health.ollama_running else "ss-dot-err"
 
-    # Row 1 — native st.markdown help= generates the same circular ? popover
-    # as st.selectbox(help=...) on Analysis Mode — identical icon and behavior.
-    st.markdown(
-        "**System Status**",
-        help=(
+    # Row 1 — label left, ? popover right (mirrors Analysis Mode pattern)
+    _ss_lbl_col, _ss_ico_col = st.columns([0.85, 0.15])
+    with _ss_lbl_col:
+        st.markdown("**System Status**")
+    with _ss_ico_col:
+        st.markdown(" ", help=(
             "System Status shows whether Amicus is ready to work.\n\n"
             "● Green dot — Everything is running normally. "
             "Amicus is ready to analyze your documents.\n\n"
             "● Red dot — Amicus is having trouble starting up. "
             "Try closing and reopening the app. "
             "If the problem continues, contact your IT administrator."
-        ),
-    )
+        ))
 
     # Row 2 — bordered collapsible box with chevron inside
     st.markdown(

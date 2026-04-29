@@ -362,11 +362,6 @@ st.markdown("""
     [data-testid="stSidebar"] .ss-model    { color: #03e8b5 !important; font-weight: 600; }
     [data-testid="stSidebar"] .ss-dot-ok  { color: #2EA043 !important; }
     [data-testid="stSidebar"] .ss-dot-err { color: #CF222E !important; }
-    [data-testid="stSidebar"] .ss-help-icon {
-        color: rgba(255, 255, 255, 0.72) !important;
-        font-size: 0.85rem;
-        cursor: help;
-    }
 
 </style>
 """, unsafe_allow_html=True)
@@ -642,20 +637,18 @@ with st.sidebar:
     _ss_model_display = _MODEL_DISPLAY_NAMES.get(_ss_model, _ss_model or "Standard")
     _ss_dot_class     = "ss-dot-ok" if _health.ollama_running else "ss-dot-err"
 
-    # Row 1 — single flex row: bold label left, (?) hover-tooltip icon right.
-    # One st.markdown() block avoids the narrow-column wrapping issue.
-    # title attribute on hover matches st.selectbox help= behavior exactly.
+    # Row 1 — native st.markdown help= generates the same circular ? popover
+    # as st.selectbox(help=...) on Analysis Mode — identical icon and behavior.
     st.markdown(
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'
-        '<strong>System Status</strong>'
-        '<span class="ss-help-icon"'
-        ' title="System Status shows whether Amicus is ready to work.'
-        ' Green dot means everything is running normally — Amicus is ready to analyze your documents.'
-        ' Red dot means Amicus is having trouble starting up — try closing and reopening the app,'
-        ' or contact your IT administrator."'
-        ' style="font-size:0.9rem;">(?)</span>'
-        '</div>',
-        unsafe_allow_html=True,
+        "**System Status**",
+        help=(
+            "System Status shows whether Amicus is ready to work.\n\n"
+            "● Green dot — Everything is running normally. "
+            "Amicus is ready to analyze your documents.\n\n"
+            "● Red dot — Amicus is having trouble starting up. "
+            "Try closing and reopening the app. "
+            "If the problem continues, contact your IT administrator."
+        ),
     )
 
     # Row 2 — bordered collapsible box with chevron inside

@@ -326,6 +326,19 @@ st.markdown("""
         letter-spacing: 3px !important;
     }
 
+    /* ── Sidebar expander — charcoal border matching selectbox ── */
+    [data-testid="stSidebar"] [data-testid="stExpander"] {
+        border: 1.5px solid #2C2C2C !important;
+        border-left: 1.5px solid #2C2C2C !important;
+        border-radius: 6px !important;
+        transform: none !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stExpander"]:hover {
+        box-shadow: 0 0 14px rgba(2, 195, 154, 0.30),
+                    0 4px 16px rgba(2, 195, 154, 0.12) !important;
+        transform: none !important;
+    }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -589,17 +602,35 @@ with st.sidebar:
     retrieval_mode = _mode_map[_mode_label]
 
     # ── System Status — IT health indicator (collapsed by default) ────────────
-    with st.expander("System Status", expanded=False):
-        _ss_profile = get_current_profile(get_primary_model())
-        _ss_name    = _ss_profile["display_name"] if _ss_profile else "Standard"
-        _ss_dot     = "#2EA043" if _health.ollama_running else "#CF222E"
-        st.markdown(
-            f'<span style="font-size:0.75rem;color:#8B949E;">'
-            f'Analysis Engine: {_ss_name}&nbsp;&nbsp;|&nbsp;&nbsp;'
-            f'Ollama <span style="color:{_ss_dot};">●</span>'
-            f'</span>',
-            unsafe_allow_html=True,
-        )
+    st.markdown("<div style='margin-top:20px'></div>", unsafe_allow_html=True)
+    _sys_status_col, _sys_help_col = st.columns([9, 1])
+    with _sys_help_col:
+        with st.popover("ⓘ", use_container_width=True):
+            st.markdown(
+                "System Status shows whether Amicus is ready to work. "
+                "A green dot means everything is running normally. "
+                "If you see a red dot, try closing and reopening the app — "
+                "if the problem continues, contact your IT administrator."
+            )
+    with _sys_status_col:
+        with st.expander("System Status", expanded=False):
+            _MODEL_DISPLAY_NAMES = {
+                "llama3.1:8b":      "Llama 3.1 8B",
+                "llama3.3:8b":      "Llama 3.3 8B",
+                "mistral-nemo:12b": "Mistral Nemo 12B",
+                "llama3.1:70b":     "Llama 3.1 70B",
+            }
+            _ss_model         = get_primary_model()
+            _ss_model_display = _MODEL_DISPLAY_NAMES.get(_ss_model, _ss_model or "Standard")
+            _ss_dot           = "#2EA043" if _health.ollama_running else "#CF222E"
+            st.markdown(
+                f'<span style="font-size:0.75rem;color:#8B949E;">'
+                f'<span style="color:#03e8b5;font-weight:600;">{_ss_model_display}</span>'
+                f'&nbsp;&nbsp;|&nbsp;&nbsp;'
+                f'<span style="color:{_ss_dot};">●</span>'
+                f'</span>',
+                unsafe_allow_html=True,
+            )
 
 
 # ── Main Area ─────────────────────────────────────────────────────────────────

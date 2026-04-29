@@ -631,8 +631,6 @@ with st.sidebar:
     retrieval_mode = _mode_map[_mode_label]
 
     # ── System Status — IT health indicator (collapsed by default) ────────────
-    # Built as a native <details>/<summary> element so the label, ⓘ tooltip,
-    # and chevron all live inside one bordered box — no columns split needed.
     st.markdown("<div style='margin-top:20px'></div>", unsafe_allow_html=True)
     _MODEL_DISPLAY_NAMES = {
         "llama3.1:8b":      "Llama 3.1 8B",
@@ -644,20 +642,21 @@ with st.sidebar:
     _ss_model_display = _MODEL_DISPLAY_NAMES.get(_ss_model, _ss_model or "Standard")
     _ss_dot_class     = "ss-dot-ok" if _health.ollama_running else "ss-dot-err"
     _ss_tooltip       = (
-        "System Status shows whether Amicus is ready to work. "
-        "A green dot means everything is running normally. "
-        "If you see a red dot, try closing and reopening the app — "
-        "if the problem continues, contact your IT administrator."
+        "System Status shows whether Amicus is ready to work.\n\n"
+        "● Green dot — Everything is running normally. Amicus is ready to analyze your documents.\n\n"
+        "● Red dot — Amicus is having trouble starting up. Try closing and reopening the app. "
+        "If the problem continues, contact your IT administrator."
     )
 
     # Row 1 — label row above the box, matching Analysis Mode structure exactly
+    # Icon character is ? and title-attribute hover tooltip matches st.selectbox help= behavior
     _ss_lbl_col, _ss_ico_col = st.columns([0.85, 0.15])
     with _ss_lbl_col:
         st.markdown("**System Status**")
     with _ss_ico_col:
         st.markdown(
             f'<div style="text-align:right;padding-top:3px;">'
-            f'<span class="ss-help-icon" title="{_ss_tooltip}">ⓘ</span>'
+            f'<span class="ss-help-icon" title="{_ss_tooltip}">?</span>'
             f'</div>',
             unsafe_allow_html=True,
         )

@@ -641,25 +641,22 @@ with st.sidebar:
     _ss_model         = get_primary_model()
     _ss_model_display = _MODEL_DISPLAY_NAMES.get(_ss_model, _ss_model or "Standard")
     _ss_dot_class     = "ss-dot-ok" if _health.ollama_running else "ss-dot-err"
-    _ss_tooltip       = (
-        "System Status shows whether Amicus is ready to work.\n\n"
-        "● Green dot — Everything is running normally. Amicus is ready to analyze your documents.\n\n"
-        "● Red dot — Amicus is having trouble starting up. Try closing and reopening the app. "
-        "If the problem continues, contact your IT administrator."
-    )
 
-    # Row 1 — label row above the box, matching Analysis Mode structure exactly
-    # Icon character is ? and title-attribute hover tooltip matches st.selectbox help= behavior
-    _ss_lbl_col, _ss_ico_col = st.columns([0.85, 0.15])
-    with _ss_lbl_col:
-        st.markdown("**System Status**")
-    with _ss_ico_col:
-        st.markdown(
-            f'<div style="text-align:right;padding-top:3px;">'
-            f'<span class="ss-help-icon" title="{_ss_tooltip}">?</span>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
+    # Row 1 — single flex row: bold label left, (?) hover-tooltip icon right.
+    # One st.markdown() block avoids the narrow-column wrapping issue.
+    # title attribute on hover matches st.selectbox help= behavior exactly.
+    st.markdown(
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'
+        '<strong>System Status</strong>'
+        '<span class="ss-help-icon"'
+        ' title="System Status shows whether Amicus is ready to work.'
+        ' Green dot means everything is running normally — Amicus is ready to analyze your documents.'
+        ' Red dot means Amicus is having trouble starting up — try closing and reopening the app,'
+        ' or contact your IT administrator."'
+        ' style="font-size:0.9rem;">(?)</span>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
     # Row 2 — bordered collapsible box with chevron inside
     st.markdown(

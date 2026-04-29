@@ -126,19 +126,38 @@ if !errorlevel! neq 0 (
 
 echo [amicus] Ollama found
 
-:: Check Ollama is running
+:: Check if Ollama is already running before attempting to start it
 curl -sf http://localhost:11434/api/tags >nul 2>&1
-if !errorlevel! neq 0 (
-    echo [amicus] WARNING: Ollama does not appear to be running.
-    echo.
-    echo   Look for the llama icon in your system tray (bottom-right of your screen).
-    echo   Click it to open Ollama. If you don't see it, open Ollama from the Start menu.
-    echo.
-    set /p CONTINUE="  Continue anyway? [y/N] "
-    if /i not "!CONTINUE!" == "y" (
-        echo   Exiting. Start Ollama and run this script again.
-        pause
-        exit /b 0
+if !errorlevel! == 0 (
+    echo [amicus] Ollama is already running
+) else (
+    echo [amicus] Ollama is not running -- attempting to start...
+    start /b "" ollama serve >nul 2>&1
+
+    :: Wait up to 10 seconds for Ollama to become available
+    set "OLLAMA_READY=0"
+    for %%i in (1 2 3 4 5) do (
+        if "!OLLAMA_READY!" == "0" (
+            timeout /t 2 /nobreak >nul
+            curl -sf http://localhost:11434/api/tags >nul 2>&1
+            if !errorlevel! == 0 set "OLLAMA_READY=1"
+        )
+    )
+
+    if "!OLLAMA_READY!" == "1" (
+        echo [amicus] Ollama started successfully
+    ) else (
+        echo [amicus] WARNING: Could not start Ollama automatically.
+        echo.
+        echo   Look for the llama icon in your system tray (bottom-right of your screen).
+        echo   Click it to open Ollama. If you don't see it, open Ollama from the Start menu.
+        echo.
+        set /p CONTINUE="  Continue anyway? [y/N] "
+        if /i not "!CONTINUE!" == "y" (
+            echo   Exiting. Start Ollama and run this script again.
+            pause
+            exit /b 0
+        )
     )
 )
 

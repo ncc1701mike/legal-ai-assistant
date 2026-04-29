@@ -106,17 +106,40 @@ fi
 
 success "Ollama found: $(ollama --version 2>/dev/null || echo 'installed')"
 
-# Check Ollama is running
-if ! curl -sf http://localhost:11434/api/tags >/dev/null 2>&1; then
-    warn "Ollama does not appear to be running."
-    echo
-    echo "  Start Ollama and then re-run this script, or continue and pull the"
-    echo "  model manually with:  ollama pull llama3.1:8b"
-    echo
-    read -r -p "  Continue anyway? [y/N] " CONTINUE
-    if [[ ! "$CONTINUE" =~ ^[Yy]$ ]]; then
-        echo "  Exiting. Start Ollama and run this script again."
-        exit 0
+# Check if Ollama is already running before attempting to start it
+if curl -sf http://localhost:11434/api/tags >/dev/null 2>&1; then
+    success "Ollama is already running"
+else
+    info "Ollama is not running — attempting to start..."
+    if [ "$(uname -s)" = "Darwin" ]; then
+        open -a Ollama 2>/dev/null || nohup ollama serve >/dev/null 2>&1 &
+    else
+        nohup ollama serve >/dev/null 2>&1 &
+    fi
+
+    # Wait up to 10 seconds for Ollama to become available
+    OLLAMA_READY=0
+    for i in 1 2 3 4 5; do
+        sleep 2
+        if curl -sf http://localhost:11434/api/tags >/dev/null 2>&1; then
+            OLLAMA_READY=1
+            break
+        fi
+    done
+
+    if [ "$OLLAMA_READY" -eq 1 ]; then
+        success "Ollama started successfully"
+    else
+        warn "Could not start Ollama automatically."
+        echo
+        echo "  On macOS: open Ollama from your Applications folder."
+        echo "  On Linux: run 'ollama serve' in a separate terminal."
+        echo
+        read -r -p "  Continue anyway? [y/N] " CONTINUE
+        if [[ ! "$CONTINUE" =~ ^[Yy]$ ]]; then
+            echo "  Exiting. Start Ollama and run this script again."
+            exit 0
+        fi
     fi
 fi
 

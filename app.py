@@ -326,18 +326,42 @@ st.markdown("""
         letter-spacing: 3px !important;
     }
 
-    /* ── Sidebar expander — charcoal border matching selectbox ── */
-    [data-testid="stSidebar"] [data-testid="stExpander"] {
-        border: 1.5px solid #2C2C2C !important;
-        border-left: 1.5px solid #2C2C2C !important;
-        border-radius: 6px !important;
-        transform: none !important;
+    /* ── System Status <details> collapsible ─────────────────── */
+    [data-testid="stSidebar"] details.ss-details {
+        border: 1.5px solid #2C2C2C;
+        border-radius: 6px;
+        overflow: hidden;
+        transition: box-shadow 0.2s ease;
     }
-    [data-testid="stSidebar"] [data-testid="stExpander"]:hover {
+    [data-testid="stSidebar"] details.ss-details:hover {
         box-shadow: 0 0 14px rgba(2, 195, 154, 0.30),
-                    0 4px 16px rgba(2, 195, 154, 0.12) !important;
-        transform: none !important;
+                    0 4px 16px rgba(2, 195, 154, 0.12);
     }
+    [data-testid="stSidebar"] summary.ss-summary {
+        padding: 7px 12px;
+        cursor: pointer;
+        display: flex !important;
+        justify-content: space-between;
+        align-items: center;
+        list-style: none;
+        background: transparent;
+    }
+    [data-testid="stSidebar"] summary.ss-summary::-webkit-details-marker { display: none; }
+    [data-testid="stSidebar"] summary.ss-summary::marker               { display: none; }
+    [data-testid="stSidebar"] summary.ss-summary::after {
+        content: "▾";
+        color: #2C2C2C !important;
+        font-size: 0.78rem;
+        flex-shrink: 0;
+        margin-left: 4px;
+    }
+    [data-testid="stSidebar"] details.ss-details[open] summary.ss-summary::after { content: "▲"; }
+    [data-testid="stSidebar"] .ss-title { font-size: 0.88rem; color: #2C2C2C !important; flex: 1; }
+    [data-testid="stSidebar"] .ss-info  { color: #8B949E !important; cursor: help; font-size: 0.8rem; margin-right: 6px; }
+    [data-testid="stSidebar"] .ss-body  { border-top: 1.5px solid #2C2C2C; padding: 7px 12px; font-size: 0.75rem; }
+    [data-testid="stSidebar"] .ss-model { color: #03e8b5 !important; font-weight: 600; }
+    [data-testid="stSidebar"] .ss-dot-ok  { color: #2EA043 !important; }
+    [data-testid="stSidebar"] .ss-dot-err { color: #CF222E !important; }
 
 </style>
 """, unsafe_allow_html=True)
@@ -602,35 +626,38 @@ with st.sidebar:
     retrieval_mode = _mode_map[_mode_label]
 
     # ── System Status — IT health indicator (collapsed by default) ────────────
+    # Built as a native <details>/<summary> element so the label, ⓘ tooltip,
+    # and chevron all live inside one bordered box — no columns split needed.
     st.markdown("<div style='margin-top:20px'></div>", unsafe_allow_html=True)
-    _sys_status_col, _sys_help_col = st.columns([9, 1])
-    with _sys_help_col:
-        with st.popover("ⓘ", use_container_width=True):
-            st.markdown(
-                "System Status shows whether Amicus is ready to work. "
-                "A green dot means everything is running normally. "
-                "If you see a red dot, try closing and reopening the app — "
-                "if the problem continues, contact your IT administrator."
-            )
-    with _sys_status_col:
-        with st.expander("System Status", expanded=False):
-            _MODEL_DISPLAY_NAMES = {
-                "llama3.1:8b":      "Llama 3.1 8B",
-                "llama3.3:8b":      "Llama 3.3 8B",
-                "mistral-nemo:12b": "Mistral Nemo 12B",
-                "llama3.1:70b":     "Llama 3.1 70B",
-            }
-            _ss_model         = get_primary_model()
-            _ss_model_display = _MODEL_DISPLAY_NAMES.get(_ss_model, _ss_model or "Standard")
-            _ss_dot           = "#2EA043" if _health.ollama_running else "#CF222E"
-            st.markdown(
-                f'<span style="font-size:0.75rem;color:#8B949E;">'
-                f'<span style="color:#03e8b5;font-weight:600;">{_ss_model_display}</span>'
-                f'&nbsp;&nbsp;|&nbsp;&nbsp;'
-                f'<span style="color:{_ss_dot};">●</span>'
-                f'</span>',
-                unsafe_allow_html=True,
-            )
+    _MODEL_DISPLAY_NAMES = {
+        "llama3.1:8b":      "Llama 3.1 8B",
+        "llama3.3:8b":      "Llama 3.3 8B",
+        "mistral-nemo:12b": "Mistral Nemo 12B",
+        "llama3.1:70b":     "Llama 3.1 70B",
+    }
+    _ss_model         = get_primary_model()
+    _ss_model_display = _MODEL_DISPLAY_NAMES.get(_ss_model, _ss_model or "Standard")
+    _ss_dot_class     = "ss-dot-ok" if _health.ollama_running else "ss-dot-err"
+    _ss_tooltip       = (
+        "System Status shows whether Amicus is ready to work. "
+        "A green dot means everything is running normally. "
+        "If you see a red dot, try closing and reopening the app — "
+        "if the problem continues, contact your IT administrator."
+    )
+    st.markdown(
+        f'<details class="ss-details">'
+        f'<summary class="ss-summary">'
+        f'<span class="ss-title">System Status</span>'
+        f'<span class="ss-info" title="{_ss_tooltip}">ⓘ</span>'
+        f'</summary>'
+        f'<div class="ss-body">'
+        f'<span class="ss-model">{_ss_model_display}</span>'
+        f'&nbsp;&nbsp;|&nbsp;&nbsp;'
+        f'<span class="{_ss_dot_class}">●</span>'
+        f'</div>'
+        f'</details>',
+        unsafe_allow_html=True,
+    )
 
 
 # ── Main Area ─────────────────────────────────────────────────────────────────

@@ -26,18 +26,11 @@ from modules.ingestion import ingest_document, get_ingested_documents, clear_all
 from modules.redaction import redact_document
 from modules.search import search_case_law, lookup_citation  # ⚠️ Requires internet — disabled for Shenelle's deployment
 from modules.llm import (
-    rag_query, stream_rag_query, summarize_documents, test_connection,
-    get_primary_model, set_primary_model,
+    rag_query, stream_rag_query, summarize_documents,
+    get_primary_model,
 )
 from modules.agentic_rag import stream_agentic_rag_query
-from modules.hardware_detect import (
-    get_system_ram_gb, get_recommended_models,
-    get_available_ollama_models, get_pull_command,
-    get_user_friendly_configs, get_current_profile, get_auto_recommended_profile,
-)
-from modules.update_checker import (
-    check_for_model_updates, set_last_update_check, get_last_update_check,
-)
+from modules.hardware_detect import get_current_profile
 from modules.setup_wizard import run_health_check, HealthStatus
 from modules.retrieval import normalize_score
 from modules.cache import clear_cache
@@ -353,9 +346,6 @@ if "show_new_case_form" not in st.session_state:
     st.session_state.show_new_case_form = False
 if "confirm_delete" not in st.session_state:
     st.session_state.confirm_delete = False
-if "update_check_result" not in st.session_state:
-    st.session_state.update_check_result = None
-
 # Resolve active case on first load
 if "active_case" not in st.session_state:
     _cases_init = list_cases()   # triggers legacy auto-register
@@ -467,113 +457,6 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # ── Analysis Engine ───────────────────────────────────────────────────────
-    st.markdown("### Analysis Engine")
-
-    _ae_model     = get_primary_model()
-    _ae_installed = get_available_ollama_models()
-    _ae_profile   = get_current_profile(_ae_model)
-    _ae_name      = _ae_profile["display_name"] if _ae_profile else "Standard"
-    _ae_for       = _ae_profile["recommended_for"] if _ae_profile else "standard hardware"
-    _ae_plat_disp = {"mac": "Mac", "windows": "Windows", "linux": "Linux"}.get(
-        _health.platform, "PC"
-    )
-    _ollama_dot = "#2EA043" if _health.ollama_running else "#CF222E"
-    _ollama_lbl = "Connected" if _health.ollama_running else "Not responding"
-
-    st.markdown(
-        f'<div style="background:rgba(2,195,154,0.06);border-left:3px solid #02C39A;'
-        f'padding:10px 12px;border-radius:4px;margin-bottom:6px;line-height:1.6;">'
-        f'<div style="font-size:0.92rem;color:#E6EDF3;font-weight:600;">{_ae_name}</div>'
-        f'<div style="font-size:0.77rem;color:#8B949E;">'
-        f'{_ae_name} — optimized for {_ae_for}</div>'
-        f'<div style="font-size:0.77rem;color:#8B949E;margin-top:3px;">'
-        f'{_ae_plat_disp} | {round(_health.ram_gb)} GB RAM</div>'
-        f'<div style="font-size:0.77rem;margin-top:3px;">'
-        f'<span style="color:{_ollama_dot};">●</span>'
-        f'<span style="color:#8B949E;"> Ollama {_ollama_lbl}</span>'
-        f'</div></div>',
-        unsafe_allow_html=True,
-    )
-
-    # Advanced Settings expander — IT administrators only
-    with st.expander("Advanced Settings (IT Administrators Only)"):
-        st.warning(
-            "Changing the Analysis Engine requires downloading additional software "
-            "(up to 40 GB). Only change this setting with guidance from your IT administrator."
-        )
-
-        _ae_ram_gb   = _health.ram_gb
-        _profiles    = get_user_friendly_configs(ram_gb=_ae_ram_gb)
-        _profile_map = {p["profile_id"]: p for p in _profiles}
-        _profile_ids = [p["profile_id"] for p in _profiles]
-        _cur_pid     = (
-            _ae_profile["profile_id"]
-            if _ae_profile and _ae_profile["profile_id"] in _profile_ids
-            else _profile_ids[0]
-        )
-
-        def _profile_label(pid: str) -> str:
-            p    = _profile_map[pid]
-            mark = "✅" if p["model_id"] in _ae_installed else "⬇️"
-            return f'{mark}  {p["display_name"]} — {p["recommended_for"]}'
-
-        _selected_pid = st.selectbox(
-            "Analysis profile",
-            options=_profile_ids,
-            format_func=_profile_label,
-            index=_profile_ids.index(_cur_pid),
-            key="profile_selector",
-        )
-
-        _sel_profile   = _profile_map[_selected_pid]
-        _sel_installed = _sel_profile["model_id"] in _ae_installed
-
-        if not _sel_installed:
-            st.caption("Install command for IT:")
-            st.code(get_pull_command(_sel_profile["model_id"]), language="bash")
-
-        if st.button("Apply", key="apply_profile_btn", disabled=not _sel_installed):
-            set_primary_model(_sel_profile["model_id"])
-            st.rerun()
-
-        st.markdown("---")
-
-        if st.button("🔄 Check for Updates", key="check_updates_btn", use_container_width=True):
-            with st.spinner("Checking..."):
-                _update_results = check_for_model_updates()
-            set_last_update_check()
-            st.session_state.update_check_result = _update_results
-
-        _uc_result = st.session_state.get("update_check_result")
-        if _uc_result is not None:
-            if not _uc_result or all(r.check_failed for r in _uc_result):
-                st.caption("⚠️ Unable to check — you may be offline.")
-            elif any(r.update_available for r in _uc_result):
-                st.warning("Update available — contact IT to update.")
-            else:
-                st.caption("Up to date ✅")
-
-    st.markdown("---")
-
-    # Connection status
-    st.markdown("### System Status")
-    if test_connection():
-        st.markdown(
-            '<p id="ollama-status" style="color:#2EA043 !important; '
-            'font-weight:900 !important; font-size:24px !important; '
-            'background-color:transparent !important; '
-            'text-shadow: 1px 1px 3px rgba(0,0,0,0.9) !important;">'
-            '● Ollama LLM Connected</p>',
-            unsafe_allow_html=True
-        )
-    else:
-        st.markdown('<p class="status-error">● Ollama Not Running</p>',
-                   unsafe_allow_html=True)
-        st.warning("Start Ollama: open Terminal and run `ollama serve`")
-
-    st.markdown("---")
-
     # Document upload — only available when a case is active
     _sidebar_case_id = st.session_state.get("active_case")
     st.markdown("### Upload Documents")
@@ -627,10 +510,52 @@ with st.sidebar:
 
     # Document inventory
     st.markdown("### Documents in Store")
-    docs = get_ingested_documents(case_id=_sidebar_case_id)
-    if docs:
-        for doc in docs:
-            st.markdown(f"📄 `{doc}`")
+    _docs_all = get_ingested_documents(case_id=_sidebar_case_id)
+    _active_case_display = next(
+        (c["display_name"] for c in _all_cases if c["case_id"] == _sidebar_case_id),
+        _sidebar_case_id or "—",
+    )
+
+    def _doc_pill(name: str) -> str:
+        label = (name[:22] + "…") if len(name) > 25 else name
+        return (
+            f'<div style="background:rgba(2,195,154,0.10);border:1px solid rgba(2,195,154,0.28);'
+            f'border-radius:10px;padding:3px 10px;margin:2px 0;font-size:0.76rem;'
+            f'font-family:monospace;color:#02C39A;white-space:nowrap;overflow:hidden;'
+            f'text-overflow:ellipsis;">{label}</div>'
+        )
+
+    if _docs_all:
+        _n = len(_docs_all)
+        st.markdown(
+            f'<div style="font-size:0.78rem;color:#5A86AD;margin-bottom:6px;">'
+            f'{_n} document{"s" if _n != 1 else ""}&nbsp;·&nbsp;'
+            f'Active case: <strong>{_active_case_display}</strong>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+        for _d in _docs_all[:4]:
+            st.markdown(_doc_pill(_d), unsafe_allow_html=True)
+
+        if _n > 4:
+            if "show_all_docs" not in st.session_state:
+                st.session_state.show_all_docs = False
+            if st.button(
+                f"View all {_n} documents ↓", key="view_all_docs_btn", use_container_width=True
+            ):
+                st.session_state.show_all_docs = not st.session_state.show_all_docs
+            if st.session_state.get("show_all_docs"):
+                _doc_filter = st.text_input(
+                    "", placeholder="Search documents...",
+                    key="doc_search", label_visibility="collapsed",
+                )
+                _filtered_docs = (
+                    [d for d in _docs_all if _doc_filter.lower() in d.lower()]
+                    if _doc_filter else _docs_all
+                )
+                for _d in _filtered_docs:
+                    st.markdown(_doc_pill(_d), unsafe_allow_html=True)
 
         st.markdown("---")
         if st.button("🗑️ Clear All Documents", key="clear_docs"):
@@ -662,6 +587,19 @@ with st.sidebar:
     )
     _mode_map = {"Basic": "hybrid", "Advanced": "rerank", "Expert": "agentic"}
     retrieval_mode = _mode_map[_mode_label]
+
+    # ── System Status — IT health indicator (collapsed by default) ────────────
+    with st.expander("System Status", expanded=False):
+        _ss_profile = get_current_profile(get_primary_model())
+        _ss_name    = _ss_profile["display_name"] if _ss_profile else "Standard"
+        _ss_dot     = "#2EA043" if _health.ollama_running else "#CF222E"
+        st.markdown(
+            f'<span style="font-size:0.75rem;color:#8B949E;">'
+            f'Analysis Engine: {_ss_name}&nbsp;&nbsp;|&nbsp;&nbsp;'
+            f'Ollama <span style="color:{_ss_dot};">●</span>'
+            f'</span>',
+            unsafe_allow_html=True,
+        )
 
 
 # ── Main Area ─────────────────────────────────────────────────────────────────

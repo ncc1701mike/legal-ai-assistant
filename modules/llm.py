@@ -2,6 +2,7 @@
 # Local LLM interface via Ollama + RAG query engine
 
 import json
+import re
 from pathlib import Path
 from langchain_ollama import ChatOllama
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -39,12 +40,50 @@ def set_primary_model(model_id: str) -> None:
     cfg["primary_model"] = model_id
     _USER_CONFIG_PATH.write_text(json.dumps(cfg, indent=2))
 
+# ── Preamble stripping ────────────────────────────────────────────────────────
+# The model sometimes emits a throat-clearing sentence before answering.
+# This regex matches those patterns anchored to the START of the response only.
+_PREAMBLE_RE = re.compile(
+    r"^"
+    r"(?:"
+    # "Based on the provided ..." family
+    r"Based\s+on\s+the\s+provided\s+(?:document\s+excerpts?|context)[^.:\n]*[.:]"
+    r"|"
+    # "Based on the context / documents ..." (shorter variant)
+    r"Based\s+on\s+(?:this\s+)?(?:the\s+)?(?:document[s]?|context)[^.:\n]*[.:]"
+    r"|"
+    # "I will answer this question ..." / "I will answer the question ..."
+    r"I\s+will\s+answer\s+(?:this\s+)?(?:the\s+)?question[^.:\n]*[.:]"
+    r"|"
+    # Generic "Based on ..." opener followed by a period or colon
+    r"Based\s+on\s+[^.:\n]{0,200}[.:]"
+    r")"
+    r"\s*",
+    re.IGNORECASE,
+)
+
+
+def strip_preamble(text: str) -> str:
+    """Remove boilerplate opener sentences from the start of an LLM response.
+
+    Only strips content anchored at position 0.  Returns the text unchanged
+    when no preamble is detected.
+    """
+    return _PREAMBLE_RE.sub("", text, count=1)
+
+
 SYSTEM_PROMPT = """You are an exceptionally precise legal document analyst helping a litigation \
 attorney during the discovery phase of a case. You analyze documents with the rigor of a \
 senior associate preparing for trial. Your primary obligations are accuracy, strict source \
 attribution, and intellectual honesty about the limits of the available evidence.
 
 CRITICAL RULES FOR USING DOCUMENT CONTEXT:
+
+0. NO PREAMBLE
+   Begin your response immediately with the substantive answer. Do not write
+   introductory sentences such as "Based on the provided documents", "Based on
+   the provided context", or "I will answer this question". Start directly with
+   the relevant facts, names, dates, or analysis.
 
 1. DOCUMENT IDENTIFICATION
    Each chunk is labeled [DOCUMENT N] with FILE, DESCRIPTION, and PAGE.
@@ -223,7 +262,7 @@ def rag_query(question: str, top_k: int = 5,
 
     from modules.retrieval import retrieve_and_format
     context, chunks = retrieve_and_format(question, top_k=top_k, mode=mode, case_id=case_id)
-    answer = query_llm(question, context=context, multihop=(mode == "multihop"))
+    answer = strip_preamble(query_llm(question, context=context, multihop=(mode == "multihop")))
     sources = []
     seen = set()
     for chunk in chunks:
@@ -309,6 +348,7 @@ def stream_rag_query(
             full_answer += token
             yield token
 
+    full_answer = strip_preamble(full_answer)
     sources = _build_sources(chunks)
     citation_report = verify_citations(full_answer, chunks)
     result = {

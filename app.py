@@ -34,6 +34,8 @@ from modules.hardware_detect import get_current_profile
 from modules.setup_wizard import run_health_check, HealthStatus
 from modules.retrieval import normalize_score
 from modules.cache import clear_cache
+from modules.upload_validator import validate_batch, detect_duplicates, sanitize_filename
+from modules.upload_manager import process_upload, handle_duplicate, get_upload_history, UploadSession
 
 load_dotenv()
 
@@ -504,46 +506,170 @@ with st.sidebar:
     else:
         uploaded_files = st.file_uploader(
             "Drop files here",
-            type=["pdf", "docx", "xlsx", "xls", "txt", "csv"],
+            type=["pdf", "txt", "docx", "doc", "rtf"],
             accept_multiple_files=True,
-            help="Supported: PDF, Word, Excel, TXT, CSV",
-            key=f"uploader_{st.session_state.uploader_key}"
+            help="Supported: PDF, Word (.docx/.doc), RTF, TXT — max 50 MB each",
+            key=f"uploader_{st.session_state.uploader_key}",
         )
 
         if uploaded_files:
-            for uploaded_file in uploaded_files:
-                if uploaded_file.name not in st.session_state.ingested_docs:
-                    with st.spinner(f"Processing {uploaded_file.name}..."):
-                        with tempfile.NamedTemporaryFile(
-                            delete=False,
-                            suffix=Path(uploaded_file.name).suffix
-                        ) as tmp:
-                            tmp.write(uploaded_file.getbuffer())
-                            tmp_path = tmp.name
-                        try:
-                            result = ingest_document(
-                                tmp_path,
-                                original_name=uploaded_file.name,
-                                case_id=_sidebar_case_id,
-                            )
-                        finally:
-                            os.unlink(tmp_path)
+            # ── Pre-upload validation table ───────────────────────────────────
+            batch = validate_batch(uploaded_files)
+            dup_results = {
+                f.name: detect_duplicates(f.name, _sidebar_case_id)
+                for f in uploaded_files
+            }
 
-                        if result["status"] == "success":
-                            st.markdown(
-                                f'<p class="status-success">✓ {uploaded_file.name}'
-                                f' ({result["chunks"]} chunks)</p>',
-                                unsafe_allow_html=True
-                            )
-                            st.session_state.ingested_docs = get_ingested_documents(
-                                case_id=_sidebar_case_id
-                            )
+            st.markdown("**Review before uploading:**")
+            for item in batch.results:
+                fname = item["file"]
+                vr = item["result"]
+                dup = dup_results.get(fname)
+                size_mb = (
+                    getattr(next((f for f in uploaded_files if f.name == fname), None), "size", 0) or 0
+                ) / (1024 * 1024)
+
+                if not vr.valid:
+                    st.markdown(
+                        f'<p class="status-skip">❌ {fname} ({size_mb:.1f} MB) — {vr.error_message}</p>',
+                        unsafe_allow_html=True,
+                    )
+                elif dup and dup.is_duplicate:
+                    st.markdown(
+                        f'<p class="status-skip">⚠ {fname} ({size_mb:.1f} MB) — already in case</p>',
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    warn_str = f" — {vr.warnings[0]}" if vr.warnings else ""
+                    st.markdown(
+                        f'<p class="status-success">✅ {fname} ({size_mb:.1f} MB){warn_str}</p>',
+                        unsafe_allow_html=True,
+                    )
+
+            # ── Duplicate resolution radio buttons ────────────────────────────
+            dup_actions: dict = {}
+            for f in uploaded_files:
+                if dup_results.get(f.name) and dup_results[f.name].is_duplicate:
+                    dup_actions[f.name] = st.radio(
+                        f"{f.name}",
+                        options=["skip", "replace", "rename_new"],
+                        format_func=lambda a: {
+                            "skip": "Skip (keep existing)",
+                            "replace": "Replace existing",
+                            "rename_new": "Upload as new version",
+                        }[a],
+                        key=f"dup_action_{f.name}",
+                        horizontal=True,
+                    )
+
+            valid_count = sum(1 for it in batch.results if it["result"].valid)
+            if valid_count == 0:
+                st.caption("No valid files to upload.")
+            else:
+                if st.button(
+                    f"Upload {valid_count} file{'s' if valid_count != 1 else ''}",
+                    key="confirm_upload_btn",
+                    type="primary",
+                ):
+                    # ── Per-file progress and processing ──────────────────────
+                    session = UploadSession(
+                        session_id=str(id(uploaded_files)),
+                        case_id=_sidebar_case_id,
+                        files_queued=valid_count,
+                        started_at=str(Path(__file__).stat().st_mtime),
+                    )
+                    _up_results = []
+                    _prog_area = st.empty()
+
+                    for f in uploaded_files:
+                        vr = next(
+                            it["result"] for it in batch.results if it["file"] == f.name
+                        )
+                        if not vr.valid:
+                            continue
+
+                        # Handle duplicate pre-processing
+                        action = dup_actions.get(f.name)
+                        override_name = f.name
+                        if action:
+                            dup_out = handle_duplicate(f.name, _sidebar_case_id, action)
+                            if action == "skip":
+                                _up_results.append({
+                                    "success": None,
+                                    "filename": f.name,
+                                    "error": "Skipped (existing document kept).",
+                                    "chunks": 0,
+                                })
+                                continue
+                            override_name = dup_out["new_filename"]
+
+                        _prog_placeholder = st.empty()
+
+                        def _make_progress_cb(placeholder, name):
+                            def _cb(filename, stage, pct):
+                                stage_label = {
+                                    "validating": "Validating…",
+                                    "checking_duplicates": "Checking for duplicates…",
+                                    "ingesting": "Adding to document store…",
+                                    "complete": "Done",
+                                    "failed": "Failed",
+                                }.get(stage, stage)
+                                placeholder.progress(pct / 100, text=f"{name}: {stage_label}")
+                            return _cb
+
+                        result = process_upload(
+                            f,
+                            _sidebar_case_id,
+                            on_progress=_make_progress_cb(_prog_placeholder, override_name),
+                            override_name=override_name,
+                        )
+                        _prog_placeholder.empty()
+                        _up_results.append(result)
+
+                        if result["success"]:
+                            session.files_processed += 1
                         else:
-                            st.markdown(
-                                f'<p class="status-skip">⚠ {uploaded_file.name}'
-                                f' — {result["status"]}</p>',
-                                unsafe_allow_html=True
-                            )
+                            session.files_failed += 1
+                            session.error_log.append({
+                                "file": result["filename"],
+                                "error": result["error"],
+                            })
+
+                    # ── Upload summary ────────────────────────────────────────
+                    ok = [r for r in _up_results if r.get("success") is True]
+                    fail = [r for r in _up_results if r.get("success") is False]
+
+                    if ok:
+                        st.success(
+                            f"{len(ok)} of {valid_count} file{'s' if valid_count != 1 else ''} "
+                            "uploaded successfully."
+                        )
+                    for r in fail:
+                        st.error(f"{r['filename']}: {r['error']}")
+                    for r in _up_results:
+                        for w in r.get("warnings", []):
+                            st.warning(f"{r['filename']}: {w}")
+
+                    st.session_state.ingested_docs = get_ingested_documents(
+                        case_id=_sidebar_case_id
+                    )
+                    st.session_state.uploader_key += 1
+                    st.rerun()
+
+        # ── Upload History ────────────────────────────────────────────────────
+        _upload_history = get_upload_history(_sidebar_case_id)
+        if _upload_history:
+            with st.expander("Upload History", expanded=False):
+                for _sess in _upload_history[:5]:
+                    _ts = _sess.started_at[:16].replace("T", " ") if _sess.started_at else "—"
+                    _ok = _sess.files_processed
+                    _fail = _sess.files_failed
+                    _total = _sess.files_queued
+                    _icon = "✅" if _fail == 0 else "⚠"
+                    st.caption(
+                        f"{_icon} {_ts} — {_ok}/{_total} files "
+                        + (f"({_fail} failed)" if _fail else "OK")
+                    )
 
     st.markdown("---")
 

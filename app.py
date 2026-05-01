@@ -338,7 +338,8 @@ st.markdown("""
                     0 4px 16px rgba(2, 195, 154, 0.12);
     }
     [data-testid="stSidebar"] summary.ss-summary {
-        padding: 7px 12px;
+        padding: 10px 12px;
+        min-height: 38px;
         cursor: pointer;
         display: flex !important;
         justify-content: space-between;
@@ -349,13 +350,13 @@ st.markdown("""
     [data-testid="stSidebar"] summary.ss-summary::-webkit-details-marker { display: none; }
     [data-testid="stSidebar"] summary.ss-summary::marker               { display: none; }
     [data-testid="stSidebar"] summary.ss-summary::after {
-        content: "▾";
+        content: "∨";
         color: #2C2C2C !important;
-        font-size: 0.78rem;
+        font-size: 0.9rem;
         flex-shrink: 0;
         margin-left: 4px;
     }
-    [data-testid="stSidebar"] details.ss-details[open] summary.ss-summary::after { content: "▲"; }
+    [data-testid="stSidebar"] details.ss-details[open] summary.ss-summary::after { content: "∧"; }
     [data-testid="stSidebar"] .ss-title { font-size: 0.88rem; color: #2C2C2C !important; flex: 1; }
     [data-testid="stSidebar"] .ss-info  { color: #8B949E !important; cursor: help; font-size: 0.8rem; margin-right: 6px; }
     [data-testid="stSidebar"] .ss-body  { border-top: 1.5px solid #2C2C2C; padding: 7px 12px; font-size: 0.75rem; }
@@ -583,15 +584,7 @@ with st.sidebar:
             ):
                 st.session_state.show_all_docs = not st.session_state.show_all_docs
             if st.session_state.get("show_all_docs"):
-                _doc_filter = st.text_input(
-                    "", placeholder="Search documents...",
-                    key="doc_search", label_visibility="collapsed",
-                )
-                _filtered_docs = (
-                    [d for d in _docs_all if _doc_filter.lower() in d.lower()]
-                    if _doc_filter else _docs_all
-                )
-                for _d in _filtered_docs:
+                for _d in _docs_all:
                     st.markdown(_doc_pill(_d), unsafe_allow_html=True)
 
         st.markdown("---")

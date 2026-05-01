@@ -5,30 +5,34 @@
 #
 # Usage:
 #   chmod +x install/terminal_setup.sh
-#   ./install/terminal_setup.sh [--dry-run] [--simulate-ram N]
+#   ./install/terminal_setup.sh [--dry-run] [--simulate-ram N] [--simulate-os Darwin|Linux]
 #
 # Flags:
-#   --dry-run          Simulate the full install without making any changes.
-#   --simulate-ram N   Pretend the machine has N GB of RAM for model selection
-#                      (useful for testing hardware-tier logic).
+#   --dry-run               Simulate the full install without making any changes.
+#   --simulate-ram N        Pretend the machine has N GB of RAM for model selection.
+#   --simulate-os Darwin    Pretend the OS is macOS — enables the Enhanced profile at 24+ GB.
+#                           Useful in CI/Docker (Linux) to test macOS model selection logic.
 #
 # Examples:
 #   ./install/terminal_setup.sh --dry-run
 #   ./install/terminal_setup.sh --dry-run --simulate-ram 8
-#   ./install/terminal_setup.sh --dry-run --simulate-ram 32
+#   ./install/terminal_setup.sh --dry-run --simulate-ram 32 --simulate-os Darwin
 
 set -euo pipefail
 
 # ── Flag parsing ──────────────────────────────────────────────────────────────
 DRY_RUN=false
 SIMULATE_RAM=""
+SIMULATE_OS=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --dry-run)         DRY_RUN=true;            shift ;;
-        --simulate-ram)    SIMULATE_RAM="$2";        shift 2 ;;
-        --simulate-ram=*)  SIMULATE_RAM="${1#*=}";   shift ;;
-        *)                                           shift ;;
+        --dry-run)          DRY_RUN=true;            shift ;;
+        --simulate-ram)     SIMULATE_RAM="$2";        shift 2 ;;
+        --simulate-ram=*)   SIMULATE_RAM="${1#*=}";   shift ;;
+        --simulate-os)      SIMULATE_OS="$2";         shift 2 ;;
+        --simulate-os=*)    SIMULATE_OS="${1#*=}";    shift ;;
+        *)                                            shift ;;
     esac
 done
 
@@ -70,9 +74,8 @@ echo
 
 if [ "$DRY_RUN" = "true" ]; then
     echo -e "${YELLOW}${BOLD}🔍  DRY RUN MODE — No changes will be made to your system${RESET}"
-    if [ -n "$SIMULATE_RAM" ]; then
-        echo -e "    Simulating RAM: ${SIMULATE_RAM} GB"
-    fi
+    [ -n "$SIMULATE_RAM" ] && echo -e "    Simulating RAM: ${SIMULATE_RAM} GB"
+    [ -n "$SIMULATE_OS"  ] && echo -e "    Simulating OS:  ${SIMULATE_OS}"
     echo
 fi
 
@@ -249,7 +252,13 @@ else
     info "Detected RAM: ${RAM_GB} GB"
 fi
 
-OS_NAME=$(uname -s)
+# OS detection — overridable by --simulate-os for CI/Docker testing
+if [ -n "$SIMULATE_OS" ]; then
+    OS_NAME="$SIMULATE_OS"
+    info "Simulated OS: $OS_NAME (--simulate-os)"
+else
+    OS_NAME=$(uname -s)
+fi
 _SUMMARY_OS=$([ "$OS_NAME" = "Darwin" ] && echo "macOS" || echo "Linux")
 
 # Conservative model selection (same logic as get_safe_default_model())

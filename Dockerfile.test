@@ -1,0 +1,16 @@
+FROM python:3.11-slim
+
+# Tools needed for the installer script
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl bash procps \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /amicus
+COPY . .
+
+RUN chmod +x install/terminal_setup.sh
+
+# Simulate a clean machine — no venv, no Ollama, no project packages installed.
+# Ollama is intentionally absent: the installer's health check correctly reports
+# it as "not installed", which is the expected behaviour on a fresh machine.
+# The --dry-run flag prevents any writes, so the image stays reproducible.

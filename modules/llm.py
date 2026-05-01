@@ -46,17 +46,14 @@ def set_primary_model(model_id: str) -> None:
 _PREAMBLE_RE = re.compile(
     r"^"
     r"(?:"
-    # "Based on the provided ..." family
-    r"Based\s+on\s+the\s+provided\s+(?:document\s+excerpts?|context)[^.:\n]*[.:]"
+    # "Based on the provided document excerpts / documents / context ..."
+    r"Based\s+on\s+the\s+provided\s+(?:document(?:\s+excerpts?|s)?|context)[^.:\n]*[.:]"
     r"|"
     # "Based on the context / documents ..." (shorter variant)
     r"Based\s+on\s+(?:this\s+)?(?:the\s+)?(?:document[s]?|context)[^.:\n]*[.:]"
     r"|"
     # "I will answer this question ..." / "I will answer the question ..."
     r"I\s+will\s+answer\s+(?:this\s+)?(?:the\s+)?question[^.:\n]*[.:]"
-    r"|"
-    # Generic "Based on ..." opener followed by a period or colon
-    r"Based\s+on\s+[^.:\n]{0,200}[.:]"
     r")"
     r"\s*",
     re.IGNORECASE,

@@ -349,15 +349,16 @@ st.markdown("""
     }
     [data-testid="stSidebar"] summary.ss-summary::-webkit-details-marker { display: none; }
     [data-testid="stSidebar"] summary.ss-summary::marker               { display: none; }
-    [data-testid="stSidebar"] summary.ss-summary::after {
-        content: "∨";
-        color: #2C2C2C !important;
-        font-size: 0.9rem;
+    [data-testid="stSidebar"] .ss-chevron {
+        display: flex;
+        align-items: center;
         flex-shrink: 0;
         margin-left: 4px;
+        transition: transform 0.2s ease;
+        color: #2C2C2C !important;
     }
-    [data-testid="stSidebar"] details.ss-details[open] summary.ss-summary::after { content: "∧"; }
-    [data-testid="stSidebar"] .ss-title { font-size: 0.88rem; color: #2C2C2C !important; flex: 1; }
+    [data-testid="stSidebar"] details.ss-details[open] .ss-chevron { transform: rotate(180deg); }
+    [data-testid="stSidebar"] .ss-title { font-size: 1rem; font-weight: 400; line-height: 1.5; color: #2C2C2C !important; flex: 1; }
     [data-testid="stSidebar"] .ss-info  { color: #8B949E !important; cursor: help; font-size: 0.8rem; margin-right: 6px; }
     [data-testid="stSidebar"] .ss-body  { border-top: 1.5px solid #2C2C2C; padding: 7px 12px; font-size: 0.75rem; }
     [data-testid="stSidebar"] .ss-model    { color: #03e8b5 !important; font-weight: 600; }
@@ -653,6 +654,7 @@ with st.sidebar:
         f'<details class="ss-details">'
         f'<summary class="ss-summary">'
         f'<span class="ss-title">System Status</span>'
+        f'<span class="ss-chevron"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></span>'
         f'</summary>'
         f'<div class="ss-body">'
         f'<span class="ss-model">{_ss_model_display}</span>'

@@ -1,0 +1,77 @@
+================================================================
+⚖️  AMICUS AI — ATTORNEY QUICK-START GUIDE
+================================================================
+
+
+1 — GETTING STARTED
+--------------------
+
+STEP 1 — Open Amicus
+  Double-click the Amicus shortcut on your desktop, or run
+  launch.sh from the Amicus folder. Your browser will open
+  automatically.
+
+STEP 2 — Create your case
+  Click "New Case" in the left sidebar. Enter the case name
+  (e.g. "Smith v. Jones"). Click Create.
+
+STEP 3 — Upload your documents
+  Click "Upload Documents" in the sidebar. Select your PDF,
+  Word, or text files. Amicus will process them — this takes
+  1–2 minutes per document.
+
+
+2 — ASKING QUESTIONS
+---------------------
+
+Type your question in the search box exactly as you would ask
+a colleague. Examples:
+
+  • "What did the defendant say about the contract signing date?"
+  • "Are there any contradictions between the witness statements?"
+  • "What damages are being claimed and how were they calculated?"
+  • "Summarize all accommodation requests made by the plaintiff."
+
+
+3 — READING YOUR RESULTS
+-------------------------
+
+Amicus shows its answer with the exact source documents cited.
+Always verify important facts against the original documents
+before relying on them in court.
+
+The confidence badge (High / Medium / Low) reflects how well the
+answer matches the source documents. High confidence means the
+cited sources directly support the answer.
+
+The Sources section lists every document Amicus consulted to
+build its answer, with a relevance score.
+
+
+4 — ANALYSIS MODES
+-------------------
+
+  Basic    — Fast answers. Best for simple lookups.
+
+  Advanced — More thorough. Recommended for most questions.
+
+  Expert   — Deepest analysis. Best for complex multi-document
+             questions. Takes approximately 30 seconds longer.
+
+
+5 — PRIVACY NOTE
+----------------
+
+Your files stay on your computer. Amicus runs entirely on your
+computer. Your case files are never uploaded to the internet or
+shared with any third party. All analysis happens locally.
+
+
+================================================================
+NEED HELP?
+
+Contact your IT administrator or [Firm Support Email] if
+Amicus is not responding.
+
+Amicus AI — Private legal document intelligence
+================================================================

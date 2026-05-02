@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amicus AI — Attorney Quick-Start Guide</title>
+<style>
+  /* ── Reset & base ─────────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --navy:   #0f1f3d;
+    --navy2:  #1a2e52;
+    --teal:   #03e8b5;
+    --teal-light: #e6fdf8;
+    --mid:    #4a5568;
+    --light:  #f7f9fc;
+    --border: #d1d9e6;
+    --body:   10.5pt;
+    --small:  9pt;
+  }
+
+  html, body {
+    background: #fff;
+    color: var(--navy);
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: var(--body);
+    line-height: 1.45;
+  }
+
+  /* ── Page container ───────────────────────────────────────────────────── */
+  .page {
+    width: 7in;
+    min-height: 9.5in;
+    margin: 0 auto;
+    padding: 0.55in 0.65in 0.45in;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  /* ── Header ───────────────────────────────────────────────────────────── */
+  .header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 3px solid var(--teal);
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .header-emoji {
+    font-size: 20pt;
+    line-height: 1;
+  }
+
+  .header-title {
+    font-size: 18pt;
+    font-weight: bold;
+    color: var(--navy);
+    letter-spacing: -0.02em;
+  }
+
+  .header-title span {
+    color: var(--teal);
+  }
+
+  .header-subtitle {
+    font-size: 9.5pt;
+    color: var(--mid);
+    font-style: italic;
+    align-self: flex-end;
+  }
+
+  /* ── Section headings ─────────────────────────────────────────────────── */
+  .section {
+    margin-bottom: 11px;
+  }
+
+  .section-heading {
+    font-family: 'Arial', 'Helvetica Neue', sans-serif;
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--navy2);
+    background: var(--light);
+    border-left: 3px solid var(--teal);
+    padding: 3px 8px;
+    margin-bottom: 7px;
+  }
+
+  /* ── Getting Started steps ────────────────────────────────────────────── */
+  .steps {
+    display: flex;
+    gap: 8px;
+  }
+
+  .step {
+    flex: 1;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 7px 9px;
+    position: relative;
+  }
+
+  .step-number {
+    font-family: 'Arial', sans-serif;
+    font-size: 7pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #fff;
+    background: var(--navy);
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 2px;
+    margin-bottom: 4px;
+  }
+
+  .step-title {
+    font-family: 'Arial', sans-serif;
+    font-weight: 700;
+    font-size: 9.5pt;
+    color: var(--navy);
+    display: block;
+    margin-bottom: 3px;
+  }
+
+  .step p {
+    color: var(--mid);
+    font-size: 9.5pt;
+    line-height: 1.4;
+  }
+
+  /* ── Two-column layout for middle sections ────────────────────────────── */
+  .two-col {
+    display: flex;
+    gap: 14px;
+  }
+
+  .col-left  { flex: 1.05; }
+  .col-right { flex: 0.95; }
+
+  /* ── Questions examples ───────────────────────────────────────────────── */
+  .questions-intro {
+    margin-bottom: 6px;
+    color: var(--mid);
+  }
+
+  .questions-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .questions-list li {
+    background: var(--teal-light);
+    border-left: 2px solid var(--teal);
+    padding: 4px 8px;
+    font-style: italic;
+    font-size: 9pt;
+    color: var(--navy2);
+    border-radius: 0 3px 3px 0;
+  }
+
+  .questions-list li::before {
+    content: '\201C';
+    color: var(--teal);
+    font-style: normal;
+    font-weight: bold;
+  }
+
+  .questions-list li::after {
+    content: '\201D';
+    color: var(--teal);
+    font-style: normal;
+    font-weight: bold;
+  }
+
+  /* ── Results paragraphs ───────────────────────────────────────────────── */
+  .results-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .result-item {
+    display: flex;
+    gap: 7px;
+    font-size: 9.5pt;
+    color: var(--mid);
+    line-height: 1.4;
+  }
+
+  .result-icon {
+    color: var(--teal);
+    font-weight: bold;
+    flex-shrink: 0;
+    margin-top: 0.5px;
+  }
+
+  /* ── Confidence badges ────────────────────────────────────────────────── */
+  .badge {
+    display: inline-block;
+    font-family: 'Arial', sans-serif;
+    font-size: 7.5pt;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 3px;
+    vertical-align: middle;
+    letter-spacing: 0.03em;
+  }
+  .badge-high   { background: #d4edda; color: #155724; }
+  .badge-med    { background: #fff3cd; color: #856404; }
+  .badge-low    { background: #f8d7da; color: #721c24; }
+
+  /* ── Analysis modes table ─────────────────────────────────────────────── */
+  .modes-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .modes-table td {
+    padding: 4px 8px;
+    font-size: 9.5pt;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  .modes-table tr:last-child td { border-bottom: none; }
+
+  .modes-table .mode-name {
+    font-family: 'Arial', sans-serif;
+    font-weight: 700;
+    color: var(--navy);
+    white-space: nowrap;
+    width: 72px;
+  }
+
+  .modes-table .mode-dot {
+    color: var(--teal);
+    font-size: 8pt;
+    width: 14px;
+    text-align: center;
+  }
+
+  .modes-table .mode-desc {
+    color: var(--mid);
+  }
+
+  /* ── Divider ──────────────────────────────────────────────────────────── */
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 10px 0;
+  }
+
+  /* ── Privacy note ─────────────────────────────────────────────────────── */
+  .privacy-box {
+    background: var(--light);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 7px 10px;
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    margin-bottom: 10px;
+  }
+
+  .privacy-icon {
+    font-size: 12pt;
+    flex-shrink: 0;
+    margin-top: 0.5px;
+  }
+
+  .privacy-box p {
+    font-size: 9pt;
+    color: var(--mid);
+    line-height: 1.4;
+  }
+
+  .privacy-box strong {
+    color: var(--navy);
+  }
+
+  /* ── Footer ───────────────────────────────────────────────────────────── */
+  .footer {
+    margin-top: auto;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .footer-help {
+    font-size: 9pt;
+    color: var(--navy);
+  }
+
+  .footer-help strong {
+    font-family: 'Arial', sans-serif;
+    font-size: 7.5pt;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--navy2);
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  .footer-brand {
+    font-size: 8pt;
+    font-style: italic;
+    color: #9aa5b4;
+    text-align: right;
+  }
+
+  /* ── Print ────────────────────────────────────────────────────────────── */
+  @media print {
+    @page {
+      size: letter;
+      margin: 0;
+    }
+
+    html, body {
+      background: #fff;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .page {
+      width: 100%;
+      min-height: 0;
+      margin: 0;
+      padding: 0.55in 0.65in 0.45in;
+      page-break-after: avoid;
+    }
+
+    /* Prevent any section from breaking across pages */
+    .section, .steps, .two-col, .privacy-box, .footer {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <span class="header-emoji">⚖️</span>
+      <span class="header-title">Amicus <span>AI</span></span>
+    </div>
+    <span class="header-subtitle">Attorney Quick-Start Guide</span>
+  </header>
+
+  <!-- Section 1: Getting Started -->
+  <section class="section">
+    <div class="section-heading">1 &nbsp;— &nbsp;Getting Started</div>
+    <div class="steps">
+      <div class="step">
+        <span class="step-number">Step 1</span>
+        <span class="step-title">Open Amicus</span>
+        <p>Double-click the <strong>Amicus</strong> shortcut on your desktop, or run <strong>launch.sh</strong> from the Amicus folder. Your browser will open automatically.</p>
+      </div>
+      <div class="step">
+        <span class="step-number">Step 2</span>
+        <span class="step-title">Create your case</span>
+        <p>Click <strong>New Case</strong> in the left sidebar. Enter the case name (e.g. <em>Smith&nbsp;v.&nbsp;Jones</em>). Click <strong>Create</strong>.</p>
+      </div>
+      <div class="step">
+        <span class="step-number">Step 3</span>
+        <span class="step-title">Upload documents</span>
+        <p>Click <strong>Upload Documents</strong> in the sidebar. Select your PDF, Word, or text files. Amicus will process them&nbsp;— this takes 1–2 minutes per document.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sections 2 & 3: two-column -->
+  <div class="two-col">
+
+    <!-- Section 2: Asking Questions -->
+    <div class="col-left">
+      <section class="section">
+        <div class="section-heading">2 &nbsp;— &nbsp;Asking Questions</div>
+        <p class="questions-intro">Type your question exactly as you would ask a colleague:</p>
+        <ul class="questions-list">
+          <li>What did the defendant say about the contract signing date?</li>
+          <li>Are there any contradictions between the witness statements?</li>
+          <li>What damages are being claimed and how were they calculated?</li>
+          <li>Summarize all accommodation requests made by the plaintiff.</li>
+        </ul>
+      </section>
+    </div>
+
+    <!-- Section 3: Reading Results -->
+    <div class="col-right">
+      <section class="section">
+        <div class="section-heading">3 &nbsp;— &nbsp;Reading Your Results</div>
+        <div class="results-list">
+          <div class="result-item">
+            <span class="result-icon">›</span>
+            <span>Amicus shows its answer with the exact source documents cited. <strong>Always verify important facts</strong> against the original documents before relying on them in court.</span>
+          </div>
+          <div class="result-item">
+            <span class="result-icon">›</span>
+            <span>The confidence badge&nbsp;—&nbsp;<span class="badge badge-high">High</span>&nbsp;<span class="badge badge-med">Medium</span>&nbsp;<span class="badge badge-low">Low</span>&nbsp;—&nbsp;reflects how well the answer matches the source documents. <strong>High</strong> means the cited sources directly support the answer.</span>
+          </div>
+          <div class="result-item">
+            <span class="result-icon">›</span>
+            <span>The <strong>Sources</strong> section lists every document consulted to build the answer, with a relevance score.</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+  </div><!-- /.two-col -->
+
+  <!-- Section 4: Analysis Modes -->
+  <section class="section">
+    <div class="section-heading">4 &nbsp;— &nbsp;Analysis Modes</div>
+    <table class="modes-table">
+      <tr>
+        <td class="mode-dot">●</td>
+        <td class="mode-name">Basic</td>
+        <td class="mode-desc">Fast answers. Best for simple lookups.</td>
+      </tr>
+      <tr>
+        <td class="mode-dot">●</td>
+        <td class="mode-name">Advanced</td>
+        <td class="mode-desc">More thorough. Recommended for most questions.</td>
+      </tr>
+      <tr>
+        <td class="mode-dot">●</td>
+        <td class="mode-name">Expert</td>
+        <td class="mode-desc">Deepest analysis. Best for complex multi-document questions. Takes approximately 30 seconds longer.</td>
+      </tr>
+    </table>
+  </section>
+
+  <!-- Section 5: Privacy Note -->
+  <div class="privacy-box">
+    <span class="privacy-icon">🔒</span>
+    <p><strong>Your files stay on your computer.</strong> Amicus runs entirely on your computer. Your case files are never uploaded to the internet or shared with any third party. All analysis happens locally.</p>
+  </div>
+
+  <!-- Footer / Help -->
+  <footer class="footer">
+    <div class="footer-help">
+      <strong>Need Help?</strong>
+      Contact your IT administrator or <strong>[Firm Support Email]</strong> if Amicus is not responding.
+    </div>
+    <div class="footer-brand">Amicus AI — Private legal document intelligence</div>
+  </footer>
+
+</div><!-- /.page -->
+</body>
+</html>

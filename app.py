@@ -165,8 +165,11 @@ st.markdown("""
     }
 
     /* ── Tabs ───────────────────────────────────────────────── */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 96px !important;
+    }
     .stTabs [data-baseweb="tab"] {
-        font-size: 18px !important;
+        font-size: 21.6px !important;
         color: #E6EDF3 !important;
         background-color: transparent !important;
         border: none !important;
@@ -806,13 +809,18 @@ html { font-size: 19.2px !important; }
 h1 {
     font-family: 'Rajdhani', sans-serif !important;
     font-weight: 700 !important;
-    font-size: 2.6rem !important;
+    font-size: 2.99rem !important;
     background: linear-gradient(135deg, #ffffff 0%, #03e8b5 50%, #02a8b8 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
     letter-spacing: 0.03em !important;
     filter: drop-shadow(0 0 18px rgba(2, 195, 154, 0.35));
+}
+
+/* ── Main subtitle ── */
+section[data-testid="stMain"] .stMarkdown > div > p em {
+    font-size: 1.15rem !important;
 }
 
 /* ── Subheadings ── */
@@ -837,7 +845,9 @@ h3 {
     color: #03e8b5 !important;
     font-family: 'Rajdhani', sans-serif !important;
     font-weight: 700 !important;
-    font-size: 1.3rem !important;
+    font-size: 1.495rem !important;
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.48),
+                 0 0 20px rgba(220, 240, 240, 0.30) !important;
 }
 
 /* ── Sidebar accent line ── */

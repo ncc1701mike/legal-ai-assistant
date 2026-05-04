@@ -183,6 +183,10 @@ st.markdown("""
     .stTabs [data-baseweb="tab-highlight"] { background-color: #2EA043 !important; }
     .stTabs [data-baseweb="tab-border"] { background-color: #2EA043 !important; }
 
+    .stTabs [data-baseweb="tab"] p,
+    [data-baseweb="tab"] p {
+        font-size: 1.2rem !important;
+    }
     .stTabs [data-baseweb="tab"] span {
         color: #E6EDF3 !important;
     }
@@ -806,7 +810,7 @@ st.markdown("""
 html { font-size: 19.2px !important; }
 
 /* ── Gradient title ── */
-h1 {
+.stApp h1 {
     font-family: 'Rajdhani', sans-serif !important;
     font-weight: 700 !important;
     font-size: 2.99rem !important;
@@ -819,8 +823,9 @@ h1 {
 }
 
 /* ── Main subtitle ── */
-section[data-testid="stMain"] .stMarkdown > div > p em {
-    font-size: 1.15rem !important;
+section[data-testid="stMain"] [data-testid="stMarkdown"] p,
+section[data-testid="stMain"] [data-testid="stMarkdown"] p em {
+    font-size: 1.32rem !important;
 }
 
 /* ── Subheadings ── */
@@ -840,12 +845,9 @@ h3 {
 }
 
 /* ── Sidebar title ── */
-[data-testid="stSidebarHeader"] *,
-[data-testid="stSidebarNav"] * {
-    color: #03e8b5 !important;
-    font-family: 'Rajdhani', sans-serif !important;
-    font-weight: 700 !important;
-    font-size: 1.495rem !important;
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h2:first-of-type {
+    font-size: 36.8px !important;
     text-shadow: 0 0 8px rgba(255, 255, 255, 0.48),
                  0 0 20px rgba(220, 240, 240, 0.30) !important;
 }

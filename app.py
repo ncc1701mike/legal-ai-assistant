@@ -24,7 +24,6 @@ from modules.feedback import (
 )
 from modules.ingestion import ingest_document, get_ingested_documents, clear_all_documents
 from modules.redaction import redact_document
-from modules.search import search_case_law, lookup_citation  # ⚠️ Requires internet — disabled for Shenelle's deployment
 from modules.llm import (
     rag_query, stream_rag_query, summarize_documents,
     get_primary_model,
@@ -738,7 +737,9 @@ with st.sidebar:
 
 - Advanced — Highest precision. Retrieves and reranks the most relevant passages before answering. Recommended for most cases.
 
-- Expert — Deep cross-document reasoning. Best for complex queries that require connecting facts across multiple files. Adds ~20s processing time.""")
+- Expert — Deep cross-document reasoning. Best for complex queries that require connecting facts across multiple files. Adds ~20s processing time.
+
+- For case law research, use your existing Westlaw, Lexis, or Fastcase subscription. Amicus focuses exclusively on your uploaded case documents.""")
     _mode_label = st.selectbox(
         "Analysis Mode",
         options=["Basic", "Advanced", "Expert"],
@@ -1044,7 +1045,7 @@ if not list_cases() or not st.session_state.get("active_case"):
     )
     st.stop()
 
-tab1, tab2, tab3, tab4 = st.tabs(["💬 Query Documents", "📋 Summarize", "🛡️ Redact", "🔍 Case Law"])
+tab1, tab2, tab3 = st.tabs(["💬 Query Documents", "📋 Summarize", "🛡️ Redact"])
 
 # ── TAB 1: Query ──────────────────────────────────────────────────────────────
 with tab1:
@@ -1654,97 +1655,3 @@ with tab3:
                     st.session_state["show_redact_comment"] = False
                     st.toast("Feedback recorded. Thank you. ✔")
                     st.rerun()
-
-# ── TAB 4: Case Law Search ────────────────────────────────────────────────────
-with tab4:
-    st.markdown("### 🔍 Case Law Search")
-    if "search_enabled" not in st.session_state:
-        st.session_state.search_enabled = False
-    col_toggle1, col_toggle2 = st.columns([1, 5])
-    with col_toggle1:
-        if st.session_state.search_enabled:
-            if st.button("🔴 Deactivate", type="secondary"):
-                st.session_state.search_enabled = False
-                st.rerun()
-        else:
-            if st.button("🟢 Activate", type="primary"):
-                st.session_state.search_enabled = True
-                st.rerun()
-    with col_toggle2:
-        if st.session_state.search_enabled:
-            st.error("🔓 **Air-gap is OFF** — Network active. Do not upload client documents during this session.", icon="⚠️")
-        else:
-            st.warning("🔒 **Activating will disable air-gap security.** Clear all documents from the store before proceeding.", icon="🛡️")
-    SEARCH_ENABLED = st.session_state.search_enabled
-
-    col1, col2 = st.columns([3, 1])
-
-    with col1:
-        case_query = st.text_input(
-            "Search case law",
-            placeholder="e.g. ADA reasonable accommodation interactive process Second Circuit",
-            disabled=not SEARCH_ENABLED
-        )
-
-    with col2:
-        court_filter = st.selectbox(
-            "Filter by court",
-            options=["All courts", "scotus", "ca1", "ca2", "ca3", "ca4",
-                     "ca5", "ca6", "ca7", "ca8", "ca9", "ca10", "ca11"],
-            disabled=not SEARCH_ENABLED
-        )
-        max_results = st.slider("Results", 3, 10, 5, disabled=not SEARCH_ENABLED)
-
-    if st.button("🔍 Search Case Law", type="primary", disabled=not SEARCH_ENABLED):
-        if not case_query:
-            st.warning("Enter a search query.")
-        else:
-            with st.spinner("Searching CourtListener..."):
-                from modules.search import search_case_law
-                court = None if court_filter == "All courts" else court_filter
-                results = search_case_law(case_query, court=court, max_results=max_results)
-
-            if results and "error" in results[0]:
-                st.error(results[0]["error"])
-            else:
-                st.success(f"Found {len(results)} results")
-                for r in results:
-                    with st.expander(f"📄 {r['case_name']} — {r['citation']}"):
-                        col_a, col_b = st.columns(2)
-                        with col_a:
-                            st.markdown(f"**Court:** {r['court']}")
-                            st.markdown(f"**Date:** {r['date_filed']}")
-                        with col_b:
-                            st.markdown(f"**Status:** {r.get('status', 'N/A')}")
-                            st.markdown(f"[View on CourtListener]({r['url']})")
-                        if r.get("summary"):
-                            st.markdown("**Excerpt:**")
-                            st.markdown(
-                                f'<div class="citation-box">{r["summary"]}</div>',
-                                unsafe_allow_html=True
-                            )
-
-    # Citation lookup
-    st.markdown("---")
-    st.markdown("**Look up a specific citation:**")
-    cite_col1, cite_col2 = st.columns([3, 1])
-    with cite_col1:
-        citation_input = st.text_input(
-            "Citation",
-            placeholder="e.g. 737 F.3d 834",
-            disabled=not SEARCH_ENABLED,
-            key="citation_lookup"
-        )
-    with cite_col2:
-        st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("Look Up", disabled=not SEARCH_ENABLED):
-            if citation_input:
-                with st.spinner("Looking up citation..."):
-                    from modules.search import lookup_citation
-                    result = lookup_citation(citation_input)
-                if "error" in result:
-                    st.error(result["error"])
-                else:
-                    st.success(f"**{result['case_name']}** — {result['citation']}")
-                    st.markdown(f"Court: {result['court']} | Date: {result['date_filed']}")
-                    st.markdown(f"[View full opinion]({result['url']})")

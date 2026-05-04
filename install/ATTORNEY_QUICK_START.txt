@@ -73,5 +73,9 @@ NEED HELP?
 Contact your IT administrator or [Firm Support Email] if
 Amicus is not responding.
 
+Case law research: Amicus analyzes your uploaded documents.
+For case law databases, continue using Westlaw, Lexis, or
+Fastcase as you normally would.
+
 Amicus AI — Private legal document intelligence
 ================================================================

@@ -141,7 +141,7 @@ def redact_text(text: str, aggressive: bool = False,
     # Tokens include '[' so the NER guard (checks for '[' in ent.text /
     # surrounding) automatically skips them during Pass 2.
     _SEP_RE = re.compile(
-        r'[═─━╌┄╍┅╎┆╏┇┉\-=_]{4,}(?:\s*[A-Za-z0-9 \t]*)?',
+        r'[═─━╌┄╍┅╎┆╏┇┉\-=_]{4,}(?:[ \t]*[A-Za-z0-9 \t]*)?',
         re.MULTILINE
     )
     _separators: Dict[str, str] = {}
@@ -338,6 +338,15 @@ def redact_text(text: str, aggressive: bool = False,
                     first_last = f"{parts[0]} {parts[-1]}"
                     if first_last not in _known_names:
                         _known_names.append(first_last)
+
+    # Add standalone last-name components so surname-only references in
+    # timeline tables (e.g. "Chen hired as ...") are caught by the sweep below.
+    for name in list(_known_names):
+        parts = name.split()
+        if len(parts) >= 2:
+            last = parts[-1]
+            if len(last) >= 3 and last not in _known_names:
+                _known_names.append(last)
 
     for name in _known_names:
         # Use letter-only lookaround instead of \b so names adjacent to pipes,

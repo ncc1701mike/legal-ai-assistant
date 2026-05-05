@@ -340,7 +340,10 @@ def redact_text(text: str, aggressive: bool = False,
                         _known_names.append(first_last)
 
     for name in _known_names:
-        pattern = r'(?<!\[)\b' + re.escape(name) + r'\b'
+        # Use letter-only lookaround instead of \b so names adjacent to pipes,
+        # underscores, and other non-letter characters (common in formatted
+        # table rows and signature blanks) are still caught.
+        pattern = r'(?<![A-Za-z])' + re.escape(name) + r'(?![A-Za-z])'
         hits = re.findall(pattern, redacted, re.IGNORECASE)
         for h in hits:
             redaction_log.append({
@@ -350,11 +353,11 @@ def redact_text(text: str, aggressive: bool = False,
             })
         redacted = re.sub(pattern, '[PARTY_NAME]', redacted, flags=re.IGNORECASE)
 
-    # Supplementary line-anchored pass: catches names that appear alone on a
-    # line (acknowledgment/signature blocks) where \b may not fire if the name
-    # is directly adjacent to non-space non-word characters like underscores.
+    # Supplementary line-anchored pass: catches names alone on a line
+    # (acknowledgment/signature blocks).  Uses \s* so non-breaking spaces,
+    # tabs, and carriage returns are all treated as ignorable whitespace.
     for name in _known_names:
-        line_pattern = r'^[ \t]*' + re.escape(name) + r'[ \t]*$'
+        line_pattern = r'^\s*' + re.escape(name) + r'\s*$'
         hits = re.findall(line_pattern, redacted, re.IGNORECASE | re.MULTILINE)
         for h in hits:
             redaction_log.append({

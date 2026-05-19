@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amicus AI — Architecture</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    background: #040d18;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+  }
+  svg { width: min(100vw, 172.4vh); height: auto; display: block; }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 1000 580" xmlns="http://www.w3.org/2000/svg">
+<defs>
+
+  <!-- Dot grid background pattern -->
+  <pattern id="dots" x="0" y="0" width="25" height="25" patternUnits="userSpaceOnUse">
+    <circle cx="12.5" cy="12.5" r="0.55" fill="#0c1c30"/>
+  </pattern>
+
+  <!-- Node fill gradient -->
+  <linearGradient id="ng" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" stop-color="#06152a"/>
+    <stop offset="100%" stop-color="#030e1e"/>
+  </linearGradient>
+
+  <!-- Key node fill gradient (brighter) -->
+  <linearGradient id="ngk" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" stop-color="#071a34"/>
+    <stop offset="100%" stop-color="#041224"/>
+  </linearGradient>
+
+  <!-- Glow for nodes -->
+  <filter id="node-glow" x="-30%" y="-30%" width="160%" height="160%">
+    <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="blur"/>
+    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+
+  <!-- Glow for title -->
+  <filter id="title-glow" x="-15%" y="-60%" width="130%" height="220%">
+    <feGaussianBlur in="SourceGraphic" stdDeviation="9" result="blur"/>
+    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+
+  <!-- Glow for particles -->
+  <filter id="p-glow" x="-300%" y="-300%" width="700%" height="700%">
+    <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur"/>
+    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+
+  <!-- Arrowhead -->
+  <marker id="arr" markerWidth="6" markerHeight="4" refX="5.5" refY="2" orient="auto">
+    <path d="M 0 0 L 6 2 L 0 4 Z" fill="#03e8b5" opacity="0.55"/>
+  </marker>
+
+  <!-- Bold arrowhead for feed path -->
+  <marker id="arr-bold" markerWidth="7" markerHeight="5" refX="6.5" refY="2.5" orient="auto">
+    <path d="M 0 0 L 7 2.5 L 0 5 Z" fill="#03e8b5" opacity="0.7"/>
+  </marker>
+
+</defs>
+
+<!-- ─── BACKGROUND ─────────────────────────────────────────────────────── -->
+<rect width="1000" height="580" fill="#040d18"/>
+<rect width="1000" height="580" fill="url(#dots)"/>
+
+<!-- ─── LOCAL MACHINE BOUNDARY ────────────────────────────────────────── -->
+<rect x="15" y="15" width="970" height="550" rx="10"
+      fill="none" stroke="#03e8b5" stroke-width="1"
+      stroke-opacity="0.13" stroke-dasharray="7 4"/>
+
+<!-- Boundary corner labels -->
+<text x="30" y="33" font-size="7" font-weight="700" letter-spacing="2.5"
+      fill="#03e8b5" opacity="0.38"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">LOCAL MACHINE</text>
+
+<circle cx="922" cy="29" r="3" fill="#03e8b5" opacity="0.45"/>
+<text x="929" y="33" font-size="7" font-weight="600" letter-spacing="1.5"
+      fill="#03e8b5" opacity="0.4"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">ALL DATA ON-DEVICE · NO INTERNET</text>
+
+<!-- ─── TITLE ──────────────────────────────────────────────────────────── -->
+<text x="500" y="52" text-anchor="middle" font-size="22" font-weight="700"
+      fill="#03e8b5" filter="url(#title-glow)" letter-spacing="4"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">AMICUS AI</text>
+<text x="500" y="68" text-anchor="middle" font-size="8.5" letter-spacing="3"
+      fill="#2e5568"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">LOCAL INTELLIGENCE ARCHITECTURE</text>
+
+<!-- ─── ZONE LABELS ────────────────────────────────────────────────────── -->
+<line x1="30" y1="100" x2="195" y2="100" stroke="#03e8b5" stroke-width="0.4" stroke-opacity="0.2"/>
+<text x="500" y="103" text-anchor="middle" font-size="7" letter-spacing="3.5"
+      fill="#03e8b5" opacity="0.45"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">DOCUMENT INGESTION PIPELINE</text>
+<line x1="805" y1="100" x2="970" y2="100" stroke="#03e8b5" stroke-width="0.4" stroke-opacity="0.2"/>
+
+<line x1="30" y1="373" x2="200" y2="373" stroke="#03e8b5" stroke-width="0.4" stroke-opacity="0.2"/>
+<text x="500" y="376" text-anchor="middle" font-size="7" letter-spacing="3.5"
+      fill="#03e8b5" opacity="0.45"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">QUERY &amp; GENERATION PIPELINE</text>
+<line x1="800" y1="373" x2="970" y2="373" stroke="#03e8b5" stroke-width="0.4" stroke-opacity="0.2"/>
+
+<!-- ─── CONNECTION ARROWS ──────────────────────────────────────────────── -->
+
+<!-- Ingestion row (top) -->
+<path d="M 200,165 L 277,165" stroke="#03e8b5" stroke-opacity="0.28" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+<path d="M 447,165 L 524,165" stroke="#03e8b5" stroke-opacity="0.28" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+<path d="M 694,165 L 771,165" stroke="#03e8b5" stroke-opacity="0.28" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+
+<!-- ChromaDB → Retrieval Engine feed (key RAG path) -->
+<path d="M 856,200 L 856,315 L 362,315 L 362,395"
+      stroke="#03e8b5" stroke-opacity="0.42" stroke-width="2" fill="none" marker-end="url(#arr-bold)"/>
+<text x="609" y="308" text-anchor="middle" font-size="7" letter-spacing="2.5"
+      fill="#03e8b5" opacity="0.38"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">VECTOR FEED</text>
+
+<!-- Query row (bottom) -->
+<path d="M 200,430 L 277,430" stroke="#03e8b5" stroke-opacity="0.32" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+<path d="M 447,430 L 524,430" stroke="#03e8b5" stroke-opacity="0.32" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+<path d="M 694,430 L 771,430" stroke="#03e8b5" stroke-opacity="0.32" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+
+<!-- ─── NODES ───────────────────────────────────────────────────────────── -->
+
+<!-- N1: Documents  cx=115 cy=165 -->
+<g filter="url(#node-glow)">
+  <rect x="30" y="130" width="170" height="70" rx="8" fill="url(#ng)">
+    <animate attributeName="stroke" values="#03e8b5;#03e8b5" dur="1s" repeatCount="1"/>
+  </rect>
+  <rect x="30" y="130" width="170" height="70" rx="8" fill="none" stroke="#03e8b5" stroke-width="1.2">
+    <animate attributeName="stroke-opacity" values="0.32;0.70;0.32" dur="3.2s" repeatCount="indefinite" begin="0s"/>
+  </rect>
+</g>
+<text x="115" y="152" text-anchor="middle" font-size="17" fill="#b8d0e2">📄</text>
+<text x="115" y="169" text-anchor="middle" font-size="10" font-weight="700" fill="#7dc4b0" letter-spacing="0.8"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">DOCUMENTS</text>
+<text x="115" y="184" text-anchor="middle" font-size="8" fill="#2e5068"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">PDF · DOCX · TXT · XLSX</text>
+
+<!-- N2: Text Extraction  cx=362 cy=165 -->
+<g filter="url(#node-glow)">
+  <rect x="277" y="130" width="170" height="70" rx="8" fill="url(#ng)"/>
+  <rect x="277" y="130" width="170" height="70" rx="8" fill="none" stroke="#03e8b5" stroke-width="1.2">
+    <animate attributeName="stroke-opacity" values="0.32;0.70;0.32" dur="3.2s" repeatCount="indefinite" begin="0.55s"/>
+  </rect>
+</g>
+<text x="362" y="152" text-anchor="middle" font-size="16" fill="#b8d0e2">✂</text>
+<text x="362" y="169" text-anchor="middle" font-size="10" font-weight="700" fill="#7dc4b0" letter-spacing="0.8"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">TEXT EXTRACTION</text>
+<text x="362" y="184" text-anchor="middle" font-size="8" fill="#2e5068"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">Chunking · pymupdf</text>
+
+<!-- N3: Embedding  cx=609 cy=165 -->
+<g filter="url(#node-glow)">
+  <rect x="524" y="130" width="170" height="70" rx="8" fill="url(#ng)"/>
+  <rect x="524" y="130" width="170" height="70" rx="8" fill="none" stroke="#03e8b5" stroke-width="1.2">
+    <animate attributeName="stroke-opacity" values="0.32;0.70;0.32" dur="3.2s" repeatCount="indefinite" begin="1.1s"/>
+  </rect>
+</g>
+<text x="609" y="152" text-anchor="middle" font-size="16" fill="#b8d0e2">⚡</text>
+<text x="609" y="169" text-anchor="middle" font-size="10" font-weight="700" fill="#7dc4b0" letter-spacing="0.8"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">EMBEDDING</text>
+<text x="609" y="184" text-anchor="middle" font-size="8" fill="#2e5068"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">all-MiniLM-L6-v2</text>
+
+<!-- N4: ChromaDB  cx=856 cy=165  (key node — brighter border) -->
+<g filter="url(#node-glow)">
+  <rect x="771" y="130" width="170" height="70" rx="8" fill="url(#ngk)"/>
+  <rect x="771" y="130" width="170" height="70" rx="8" fill="none" stroke="#03e8b5" stroke-width="1.6">
+    <animate attributeName="stroke-opacity" values="0.42;0.88;0.42" dur="3.0s" repeatCount="indefinite" begin="1.65s"/>
+  </rect>
+</g>
+<text x="856" y="152" text-anchor="middle" font-size="16" fill="#b8d0e2">💾</text>
+<text x="856" y="169" text-anchor="middle" font-size="10" font-weight="700" fill="#7dc4b0" letter-spacing="0.8"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">VECTOR STORE</text>
+<text x="856" y="184" text-anchor="middle" font-size="8" fill="#2e5068"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">ChromaDB · Local SQLite</text>
+
+<!-- N5: User Query  cx=115 cy=430 -->
+<g filter="url(#node-glow)">
+  <rect x="30" y="395" width="170" height="70" rx="8" fill="url(#ng)"/>
+  <rect x="30" y="395" width="170" height="70" rx="8" fill="none" stroke="#03e8b5" stroke-width="1.2">
+    <animate attributeName="stroke-opacity" values="0.32;0.70;0.32" dur="3.6s" repeatCount="indefinite" begin="0.28s"/>
+  </rect>
+</g>
+<text x="115" y="417" text-anchor="middle" font-size="16" fill="#b8d0e2">💬</text>
+<text x="115" y="434" text-anchor="middle" font-size="10" font-weight="700" fill="#7dc4b0" letter-spacing="0.8"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">USER QUERY</text>
+<text x="115" y="449" text-anchor="middle" font-size="8" fill="#2e5068"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">Natural Language</text>
+
+<!-- N6: Retrieval Engine  cx=362 cy=430  (key node — brighter border) -->
+<g filter="url(#node-glow)">
+  <rect x="277" y="395" width="170" height="70" rx="8" fill="url(#ngk)"/>
+  <rect x="277" y="395" width="170" height="70" rx="8" fill="none" stroke="#03e8b5" stroke-width="1.6">
+    <animate attributeName="stroke-opacity" values="0.42;0.88;0.42" dur="2.9s" repeatCount="indefinite" begin="0.85s"/>
+  </rect>
+</g>
+<text x="362" y="417" text-anchor="middle" font-size="16" fill="#b8d0e2">🔍</text>
+<text x="362" y="433" text-anchor="middle" font-size="10" font-weight="700" fill="#7dc4b0" letter-spacing="0.8"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">RETRIEVAL ENGINE</text>
+<text x="362" y="448" text-anchor="middle" font-size="7.5" fill="#2e5068"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">Vector + BM25 + RRF</text>
+
+<!-- N7: Ollama LLM  cx=609 cy=430  (key node) -->
+<g filter="url(#node-glow)">
+  <rect x="524" y="395" width="170" height="70" rx="8" fill="url(#ngk)"/>
+  <rect x="524" y="395" width="170" height="70" rx="8" fill="none" stroke="#03e8b5" stroke-width="1.6">
+    <animate attributeName="stroke-opacity" values="0.42;0.88;0.42" dur="3.3s" repeatCount="indefinite" begin="1.4s"/>
+  </rect>
+</g>
+<text x="609" y="417" text-anchor="middle" font-size="16" fill="#b8d0e2">🤖</text>
+<text x="609" y="433" text-anchor="middle" font-size="10" font-weight="700" fill="#7dc4b0" letter-spacing="0.8"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">OLLAMA LLM</text>
+<text x="609" y="448" text-anchor="middle" font-size="8" fill="#2e5068"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">llama3.1 · phi4 · GPU/CPU</text>
+
+<!-- N8: AI Response  cx=856 cy=430 -->
+<g filter="url(#node-glow)">
+  <rect x="771" y="395" width="170" height="70" rx="8" fill="url(#ng)"/>
+  <rect x="771" y="395" width="170" height="70" rx="8" fill="none" stroke="#03e8b5" stroke-width="1.2">
+    <animate attributeName="stroke-opacity" values="0.32;0.70;0.32" dur="3.1s" repeatCount="indefinite" begin="1.95s"/>
+  </rect>
+</g>
+<text x="856" y="417" text-anchor="middle" font-size="16" fill="#b8d0e2">✅</text>
+<text x="856" y="434" text-anchor="middle" font-size="10" font-weight="700" fill="#7dc4b0" letter-spacing="0.8"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">AI RESPONSE</text>
+<text x="856" y="449" text-anchor="middle" font-size="8" fill="#2e5068"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">Answer + Citations</text>
+
+<!-- ─── ANIMATED PARTICLES ─────────────────────────────────────────────── -->
+
+<!-- N1 → N2 (ingestion arrow, 77px, dur=1.3s) -->
+<circle r="3.5" fill="#03e8b5" opacity="0" filter="url(#p-glow)">
+  <animateMotion path="M 200,165 L 277,165" dur="1.3s" repeatCount="indefinite" begin="0s"/>
+  <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.08;0.92;1" dur="1.3s" repeatCount="indefinite" begin="0s"/>
+  <animate attributeName="r" values="3;4;3" dur="1.3s" repeatCount="indefinite" begin="0s"/>
+</circle>
+<circle r="3" fill="#03e8b5" opacity="0" filter="url(#p-glow)">
+  <animateMotion path="M 200,165 L 277,165" dur="1.3s" repeatCount="indefinite" begin="0.65s"/>
+  <animate attributeName="opacity" values="0;0.65;0.65;0" keyTimes="0;0.08;0.92;1" dur="1.3s" repeatCount="indefinite" begin="0.65s"/>
+</circle>
+
+<!-- N2 → N3 (77px, dur=1.3s) -->
+<circle r="3.5" fill="#03e8b5" opacity="0" filter="url(#p-glow)">
+  <animateMotion path="M 447,165 L 524,165" dur="1.3s" repeatCount="indefinite" begin="0.25s"/>
+  <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.08;0.92;1" dur="1.3s" repeatCount="indefinite" begin="0.25s"/>
+  <animate attributeName="r" values="3;4;3" dur="1.3s" repeatCount="indefinite" begin="0.25s"/>
+</circle>
+<circle r="3" fill="#03e8b5" opacity="0" filter="url(#p-glow)">
+  <animateMotion path="M 447,165 L 524,165" dur="1.3s" repeatCount="indefinite" begin="0.9s"/>
+  <animate attributeName="opacity" values="0;0.65;0.65;0" keyTimes="0;0.08;0.92;1" dur="1.3s" repeatCount="indefinite" begin="0.9s"/>
+</circle>
+
+<!-- N3 → N4 (77px, dur=1.3s) -->
+<circle r="3.5" fill="#03e8b5" opacity="0" filter="url(#p-glow)">
+  <animateMotion path="M 694,165 L 771,165" dur="1.3s" repeatCount="indefinite" begin="0.5s"/>
+  <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.08;0.92;1" dur="1.3s" repeatCount="indefinite" begin="0.5s"/>
+  <animate attributeName="r" values="3;4;3" dur="1.3s" repeatCount="indefinite" begin="0.5s"/>
+</circle>
+<circle r="3" fill="#03e8b5" opacity="0" filter="url(#p-glow)">
+  <animateMotion path="M 694,165 L 771,165" dur="1.3s" repeatCount="indefinite" begin="1.15s"/>
+  <animate attributeName="opacity" values="0;0.65;0.65;0" keyTimes="0;0.08;0.92;1" dur="1.3s" repeatCount="indefinite" begin="1.15s"/>
+</circle>
+
+<!-- N4 → N6 (ChromaDB → Retrieval feed, ~690px path, dur=4.2s, 3 particles) -->
+<circle r="4.5" fill="#03e8b5" opacity="0" filter="url(#p-glow)">
+  <animateMotion path="M 856,200 L 856,315 L 362,315 L 362,395" dur="4.2s" repeatCount="indefinite" begin="0s"/>
+  <animate attributeName="opacity" values="0;0;1;1;1;0" keyTimes="0;0.04;0.1;0.5;0.96;1" dur="4.2s" repeatCount="indefinite" begin="0s"/>
+  <animate attributeName="r" values="3.5;5;4;5;3.5" dur="4.2s" repeatCount="indefinite" begin="0s"/>
+</circle>
+<circle r="4" fill="#03e8b5" opacity="0" filter="url(#p-glow)">
+  <animateMotion path="M 856,200 L 856,315 L 362,315 L 362,395" dur="4.2s" repeatCount="indefinite" begin="1.4s"/>
+  <animate attributeName="opacity" values="0;0;0.8;0.8;0.8;0" keyTimes="0;0.04;0.1;0.5;0.96;1" dur="4.2s" repeatCount="indefinite" begin="1.4s"/>
+  <animate attributeName="r" values="3;4.5;3.5;4.5;3" dur="4.2s" repeatCount="indefinite" begin="1.4s"/>
+</circle>
+<circle r="3.5" fill="#03e8b5" opacity="0" filter="url(#p-glow)">
+  <animateMotion path="M 856,200 L 856,315 L 362,315 L 362,395" dur="4.2s" repeatCount="indefinite" begin="2.8s"/>
+  <animate attributeName="opacity" values="0;0;0.6;0.6;0.6;0" keyTimes="0;0.04;0.1;0.5;0.96;1" dur="4.2s" repeatCount="indefinite" begin="2.8s"/>
+</circle>
+
+<!-- N5 → N6 (77px, dur=1.2s) -->
+<circle r="3.5" fill="#03e8b5" opacity="0" filter="url(#p-glow)">
+  <animateMotion path="M 200,430 L 277,430" dur="1.2s" repeatCount="indefinite" begin="0.1s"/>
+  <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.08;0.92;1" dur="1.2s" repeatCount="indefinite" begin="0.1s"/>
+  <animate attributeName="r" values="3;4;3" dur="1.2s" repeatCount="indefinite" begin="0.1s"/>
+</circle>
+<circle r="3" fill="#03e8b5" opacity="0" filter="url(#p-glow)">
+  <animateMotion path="M 200,430 L 277,430" dur="1.2s" repeatCount="indefinite" begin="0.7s"/>
+  <animate attributeName="opacity" values="0;0.65;0.65;0" keyTimes="0;0.08;0.92;1" dur="1.2s" repeatCount="indefinite" begin="0.7s"/>
+</circle>
+
+<!-- N6 → N7 (77px, dur=1.2s) -->
+<circle r="3.5" fill="#03e8b5" opacity="0" filter="url(#p-glow)">
+  <animateMotion path="M 447,430 L 524,430" dur="1.2s" repeatCount="indefinite" begin="0.4s"/>
+  <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.08;0.92;1" dur="1.2s" repeatCount="indefinite" begin="0.4s"/>
+  <animate attributeName="r" values="3;4;3" dur="1.2s" repeatCount="indefinite" begin="0.4s"/>
+</circle>
+<circle r="3" fill="#03e8b5" opacity="0" filter="url(#p-glow)">
+  <animateMotion path="M 447,430 L 524,430" dur="1.2s" repeatCount="indefinite" begin="1.0s"/>
+  <animate attributeName="opacity" values="0;0.65;0.65;0" keyTimes="0;0.08;0.92;1" dur="1.2s" repeatCount="indefinite" begin="1.0s"/>
+</circle>
+
+<!-- N7 → N8 (77px, dur=1.2s) -->
+<circle r="3.5" fill="#03e8b5" opacity="0" filter="url(#p-glow)">
+  <animateMotion path="M 694,430 L 771,430" dur="1.2s" repeatCount="indefinite" begin="0.7s"/>
+  <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.08;0.92;1" dur="1.2s" repeatCount="indefinite" begin="0.7s"/>
+  <animate attributeName="r" values="3;4.5;3" dur="1.2s" repeatCount="indefinite" begin="0.7s"/>
+</circle>
+<circle r="3" fill="#03e8b5" opacity="0" filter="url(#p-glow)">
+  <animateMotion path="M 694,430 L 771,430" dur="1.2s" repeatCount="indefinite" begin="1.3s"/>
+  <animate attributeName="opacity" values="0;0.65;0.65;0" keyTimes="0;0.08;0.92;1" dur="1.2s" repeatCount="indefinite" begin="1.3s"/>
+</circle>
+
+<!-- ─── FOOTER ─────────────────────────────────────────────────────────── -->
+<text x="500" y="548" text-anchor="middle" font-size="7.5" letter-spacing="1.8" fill="#1c3345"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">
+  CASE MANAGER · REDACTION ENGINE · FEEDBACK LOGGER · CITATION VERIFIER · HARDWARE DETECTOR
+</text>
+<text x="500" y="563" text-anchor="middle" font-size="7" letter-spacing="1" fill="#142838"
+      font-family="'SF Mono','Fira Code','Courier New',monospace">
+  All components run locally — no document data leaves the machine
+</text>
+
+</svg>
+</body>
+</html>
